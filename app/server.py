@@ -564,26 +564,43 @@ class App:
             kitchen_stats=kitchen,
         )
 
-    def reset_day(self, *, export_first: bool | None = None) -> dict:
-        """Clear today's events; optionally export CSV+JSON first."""
+    def reset_day(
+        self,
+        *,
+        export_first: bool | None = None,
+        day: str | None = None,
+    ) -> dict:
+        """Clear events for a calendar day; optionally export CSV+JSON first.
+
+        Default day = today. Clearing a past day does not refresh live kiosk
+        counters unless that day is still \"today\".
+        """
+        target = day or date.today().isoformat()
+        # Basic YYYY-MM-DD guard
+        try:
+            date.fromisoformat(target)
+        except ValueError as e:
+            raise ValueError(f"day: YYYY-MM-DD ({e})") from e
         with self._lock:
             do_export = (
                 self.cfg.export_before_reset
                 if export_first is None
                 else bool(export_first)
             )
-            day = date.today().isoformat()
             exported = None
         if do_export:
-            exported = self.export_day_files(day)
+            exported = self.export_day_files(target)
         with self._lock:
-            deleted = self.storage.clear_day()
-            self._stats_day = date.today().isoformat()
-            self._refresh_day()
-            LOG.info("day stats reset (%s events deleted)", deleted)
+            deleted = self.storage.clear_day(target)
+            today = date.today().isoformat()
+            if target == today:
+                self._stats_day = today
+                self._refresh_day()
+            LOG.info("day stats reset day=%s (%s events deleted)", target, deleted)
             return {
                 "deleted": deleted,
                 "exported": exported,
+                "cleared_day": target,
                 "day": {
                     "count": self.machine_a.state.day_count,
                     "total_g": self.machine_a.state.day_total_g,
@@ -856,9 +873,18 @@ def make_handler(app: App):
                         export_first = None
                     else:
                         export_first = bool(export_first)
+                    day_arg = data.get("day")
+                    if day_arg is not None and not isinstance(day_arg, str):
+                        raise ValueError("day: YYYY-MM-DD merkkijono")
                     self._json(
                         200,
-                        {"ok": True, **app.reset_day(export_first=export_first)},
+                        {
+                            "ok": True,
+                            **app.reset_day(
+                                export_first=export_first,
+                                day=day_arg if isinstance(day_arg, str) else None,
+                            ),
+                        },
                     )
                 elif path == "/api/config":
                     cfg = app.update_config(data)
