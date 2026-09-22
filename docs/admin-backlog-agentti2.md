@@ -33,6 +33,15 @@ Admin tukee **enintään kolmea vaakaa + lähetintä** (YKV). Slotit valitaan Ad
 
 **Skaalaus:** nyt max 3; config-/event-skeema suunnitellaan niin että slotteja voi lisätä myöhemmin.
 
+### Lukittu: päivittäinen virta (M-A12)
+
+| Osa | Päätös |
+|-----|--------|
+| Edge käynnistys | **BIOS RTC wake** (esim. 08:00) |
+| Edge sammutus | Softa-timer → export/reset → `poweroff` (esim. 18:00) |
+| YKV + näytöt | Virta **OFF katkaisijalla** (ei edge-PC:n relettä oletuksena) |
+| Päivän tallennus/nollaus | **Ennen sammutusta**; bootissa varmistus jos jäi tekemättä |
+
 ### Lukittu: Admin kenttäohjeet (i)
 
 Jokaisen **muokattavan** Admin-kentän vieressä pieni **(i)**-kuvake. **Hover** riittää (lyhyt FI-tooltip: mitä arvon muuttaminen tekee). Ei erillistä ohjepaneelia v1:ssä.
@@ -81,6 +90,7 @@ Kartta: Agentti 3 §3 (admin omistaa) + kilpailija-analyysi §4 Must adminille +
 | M-A9 | **Päivän pienin g** + footer-labelit | UI-lock 2026-09-22 | `day.max_g`; label “Keskiarvo g / ruokailija” | Storage/API: `min_g`; kiosk footer: `kpl` · `kg` · `keskimäärin g / palautus` · `Päivän pienin g` (ei “tänään”); tyhjä → `—` |
 | M-A10 | **Vaakakokoonpanot A / A+B / A+C / A+B+C / C** — **hyväksytty** | Käyttäjä 2026-09-22 | **Toteutettu** | Config `scale_layout`; kiinteät nimet; hostit Administa; C = data only, tilastot erillään; kiosk full-width A / split A+B / ei kioskia jos vain C |
 | M-A11 | **Kenttäkohtaiset (i)-ohjeet Adminissa** — **hyväksytty** | Käyttäjä 2026-09-22 | **Toteutettu** (hover) | (i) + **hover**-tooltip FI |
+| M-A12 | **Päivittäinen virta-aikataulu + päivän vienti/nollaus** — **hyväksytty** | Käyttäjä 2026-09-22 | Ei | Edge: RTC wake + sammutustimer; YKV+näyttö katkaisijalla OFF; export+reset **ennen sammutusta** (+ boot-varmistus); Admin: kellonajat (valinnainen) |
 
 ### Should
 
@@ -156,7 +166,7 @@ Konkreettiset tehtävät järjestyksessä (5–8 kpl). Pieniä API/config-laajen
 7. **Device health per-scale (M-A5)** — Health `scales[]` (a/b/c + nimi + käyttötarkoitus); admin-ruudukko; mode/conn vain Adminissa.
 8. **S1 viestiprofiili** + **jaksoaggregaatit** + **CSV jaksolle** / CO₂ / locale (jos aikaa).
 
-**Sprintin ulkopuolelle (seuraava jono):** auth/roolit, trendikaaviot, hälytykset, event `site_id`/`device_id` -skeema, PDF, kategoriat.
+**Sprintin ulkopuolelle (seuraava jono):** **M-A12 virta-aikataulu** (RTC + sammutus + export/reset; YKV/näyttö katkaisija), auth/roolit, trendikaaviot, hälytykset, event `site_id`/`device_id` -skeema, PDF, kategoriat.
 
 ---
 

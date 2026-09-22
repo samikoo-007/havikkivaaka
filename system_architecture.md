@@ -85,6 +85,23 @@ Temporary override when working on dashboard without scale (not for dealer boot)
 
 **Dealer / live boot (current default on Lenovo):** no `mock.conf`; both `havikki-ykv-link` and `havikki-kiosk-app` **enabled**. On boot: DHCP for YKV `.11`, app `--host 192.168.50.11 --port 23 --http-host 0.0.0.0`. Without YKV cable, `mode=live` and `connected=false` is expected.
 
+### Daily power schedule (lukittu 2026-09-22)
+
+Tuotantotavoite: automaattinen päivärytmi ilman pilveä.
+
+| Komponentti | Toiminta | Toteutus |
+|-------------|----------|----------|
+| **Edge Ubuntu** | Sammutus illalla (esim. 18:00); käynnistys aamulla (esim. 08:00) | Softa: `systemd` timer → `poweroff`. Käynnistys: **BIOS/UEFI RTC wake** (emolevykohtainen; dokumentoi kloonausohjeeseen). Ei WoL/relettä edge-PC:lle oletuksena. |
+| **YKV + diner-näyttö(t)** | Virta **OFF** päivän päätteeksi | **Katkaisija** (manuaalinen tai ajastettu pistorasia/rele) — erillään edge-PC:stä. Aamulla virta ON ennen/kanssa RTC-herätyksen. |
+| **Päivän nollaus + tallennus** | Edellisen päivän CSV/JSON + `reset-day` | **Ensisijaisesti juuri ennen sammutusta** (timer-skripti: export → reset → `poweroff`). **Varalla heti bootissa**, jos edellinen päivä jäi nollaamatta (esim. kova katkaisu / timer ohitettu). `export_before_reset` jo configissa. |
+
+**Järjestys illalla (suositus):** (1) export + reset-day → (2) `poweroff` edge → (3) katkaisija OFF YKV + näytöt (henkilökunta tai ajastin ~minuutti softasammutuksen jälkeen).  
+**Aamulla:** katkaisija ON → RTC herättää edgen → `havikki-ykv-link` + kiosk-app + Chromium.
+
+**Ei oletuksena:** edge-PC samalla releellä kuin YKV (RTC-wake vaatii PC:n ACC standby / G3-tilan emolevyn mukaan — testaa kohdekoneella).
+
+Backlog: Adminin kellonajat + skripti (`docs/admin-backlog-agentti2.md` M-A12).
+
 **Back to live YKV** (from mock):
 ```bash
 sudo rm -f /etc/systemd/system/havikki-kiosk-app.service.d/mock.conf

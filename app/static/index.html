@@ -168,6 +168,8 @@
       transition: transform 0.2s ease, color 0.25s ease;
     }
     .face.idle { color: var(--muted); font-size: clamp(2.2rem, 7vmin, 4.5rem); }
+    .face.idle.conn-ok { color: var(--ok); }
+    .face.idle.conn-bad { color: var(--bad); }
     .scale-panel.fb-smile .face,
     .scale-panel.fb-ok .face,
     .scale-panel.fb-frown .face { color: #fff; }
@@ -437,14 +439,19 @@
       const err = panel.querySelector('[data-role="err"]');
       const qg = Number(sc.quantize_g ?? 2);
       const dec = qg >= 1 ? 0 : 1;
+      const linked = !!sc.connected || mode === "mock";
 
       panel.classList.remove("fb-smile", "fb-ok", "fb-frown", "fb-settling", "waiting");
+
+      function setIdleFace(symbol) {
+        face.textContent = symbol;
+        face.className = "face idle " + (linked ? "conn-ok" : "conn-bad");
+      }
 
       if (!sc.connected && mode !== "mock") {
         panel.classList.add("waiting");
         msg.textContent = "odottaa vaakaa";
-        face.textContent = "•";
-        face.className = "face idle";
+        setIdleFace("•");
         weight.textContent = "";
         err.textContent = "";
         return;
@@ -476,12 +483,12 @@
         if (sc.phase === "settling") {
           panel.classList.add("fb-settling");
           face.textContent = "…";
+          face.className = "face idle";
         } else if (sc.phase === "away") {
-          face.textContent = "↺";
+          setIdleFace("↺");
         } else {
-          face.textContent = "•";
+          setIdleFace("•");
         }
-        face.className = "face idle";
       }
       err.textContent = friendlyError(sc.error);
     }
