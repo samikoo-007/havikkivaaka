@@ -59,7 +59,7 @@ Asetukset → `data/config.json` (hot-reload). Layout, YKV-hostit, `kiosk_title`
 |--------|-----------|
 | `scale_layout` | `a` \| `a_b` \| `a_c` \| `a_b_c` \| `c` |
 | `kiosk_title` | Hävikkivaaka |
-| `kiosk_location` | Eiran aikuislukio |
+| `kiosk_location` | Write location |
 | `threshold_ok_g` / `threshold_g` | 200 / 300 g |
 | `export_before_reset` | true |
 
