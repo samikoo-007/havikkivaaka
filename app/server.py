@@ -13,9 +13,18 @@ import time
 from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
-from app.config import AppConfig, ConfigStore
+from app.config import (
+    AppConfig,
+    ConfigStore,
+    KITCHEN_SCALE_IDS,
+    PLATE_SCALE_IDS,
+    SCALE_LABELS,
+    layout_diner_split,
+    layout_kiosk_enabled,
+)
 from app.kcp import KcpClient, MockScale, grams_from_sad, load_sad_cal
 from app.state_machine import StateMachine
 from app.storage import Storage
@@ -73,13 +82,104 @@ class App:
         EXPORTS.mkdir(parents=True, exist_ok=True)
         self.config_store = ConfigStore(DATA / "config.json")
         self.cfg = self.config_store.get()
+        # CLI/env host for A bootstrap if config host empty
+        if not self.cfg.scale_a_host:
+            self.cfg = self.config_store.update(
+                {"scale_a_host": host, "scale_a_port": port}
+            )
         self.storage = Storage(DATA / "events.sqlite3")
-        self.scale: KcpClient | MockScale
-        if mock:
-            self.scale = MockScale()
-        else:
-            self.scale = KcpClient(host, port)
-        self.machine = StateMachine(
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._stats_day = date.today().isoformat()
+        self._fail_delay_s = POLL_FAIL_MIN_S
+        self._last_logged_error: str | None = None
+        self._last_poll_ok_at: str | None = None
+        self._sad_cal = None if mock else load_sad_cal()
+        # SAD soft-tare per scale (KCP T does not affect SAD path).
+        self._sad_tare_g: dict[str, float] = {"a": 0.0, "b": 0.0, "c": 0.0}
+        self._sad_raw_g: dict[str, float] = {"a": 0.0, "b": 0.0, "c": 0.0}
+
+        self.scale_a: KcpClient | MockScale | None = None
+        self.scale_b: KcpClient | MockScale | None = None
+        self.scale_c: KcpClient | MockScale | None = None
+
+        self.machine_a = self._make_machine("a", on_auto_tare=self._on_auto_tare_a)
+        self.machine_b = self._make_machine("b", on_auto_tare=self._on_auto_tare_b)
+        self.machine_c = self._make_machine(
+            "c", on_auto_tare=self._on_auto_tare_c, data_only=True
+        )
+        self.machine = self.machine_a  # legacy alias (admin/tare)
+
+        self._init_scales()
+        self.scale = self.scale_a  # legacy
+
+        if self._sad_cal:
+            LOG.info(
+                "weight source=SAD (SI cal broken on this YKV); empty=%s ref=%s@%skg",
+                int(self._sad_cal["sad_empty"]),
+                int(self._sad_cal["sad_at_ref"]),
+                self._sad_cal["ref_kg"],
+            )
+        self._refresh_day()
+        if self.cfg.prefill_waste_g > 0 and "a" in self.cfg.slots():
+            self.machine_a.apply_baseline(self.cfg.prefill_waste_g)
+
+    def _machines(self) -> dict[str, StateMachine]:
+        return {"a": self.machine_a, "b": self.machine_b, "c": self.machine_c}
+
+    def _scales(self) -> dict[str, KcpClient | MockScale | None]:
+        return {"a": self.scale_a, "b": self.scale_b, "c": self.scale_c}
+
+    def _set_scale(self, slot: str, client: KcpClient | MockScale | None) -> None:
+        if slot == "a":
+            self.scale_a = client
+            self.scale = client
+        elif slot == "b":
+            self.scale_b = client
+        elif slot == "c":
+            self.scale_c = client
+
+    def _init_scales(self) -> None:
+        """Create clients for enabled slots from config (mock → MockScale)."""
+        slots = self.cfg.slots()
+        for slot in ("a", "b", "c"):
+            old = self._scales()[slot]
+            if old is not None:
+                try:
+                    old.close()
+                except Exception:
+                    pass
+                self._set_scale(slot, None)
+            if slot not in slots:
+                continue
+            if self.mock:
+                self._set_scale(slot, MockScale())
+                continue
+            host = self.cfg.host_for(slot)
+            port = self.cfg.port_for(slot)
+            if not host:
+                LOG.warning("scale %s enabled but host empty — skipped", slot)
+                continue
+            # CLI host wins for A on first boot when matching defaults
+            if slot == "a" and self.host and host == "192.168.50.11":
+                # Prefer explicit --host / HAVIKKI_HOST when provided at start
+                host = self.host
+                port = self.port
+            self._set_scale(slot, KcpClient(host, port))
+            LOG.info("scale %s → %s:%s", slot, host, port)
+
+    def _make_machine(
+        self,
+        scale_id: str,
+        *,
+        on_auto_tare: Callable[[], None] | None = None,
+        data_only: bool = False,
+    ) -> StateMachine:
+        def _on_event(grams: float, feedback: str) -> None:
+            self._on_event(grams, feedback, scale_id)
+
+        return StateMachine(
+            threshold_ok_g=self._cfg_float("threshold_ok_g", "HAVIKKI_THRESHOLD_OK_G", 200),
             threshold_g=self._cfg_float("threshold_g", "HAVIKKI_THRESHOLD_G", 300),
             settle_s=self._cfg_float("settle_s", "HAVIKKI_SETTLE_S", 10),
             empty_g=self._cfg_float("empty_g", "HAVIKKI_EMPTY_G", 20),
@@ -89,29 +189,10 @@ class App:
             quantize_g=float(getattr(self.cfg, "quantize_g", 2.0)),
             empty_bin_g=float(self.cfg.empty_bin_g),
             empty_bin_tolerance_g=float(self.cfg.empty_bin_tolerance_g),
-            on_event=self._on_event,
-            on_auto_tare=self._on_auto_tare,
+            data_only=data_only,
+            on_event=_on_event,
+            on_auto_tare=on_auto_tare,
         )
-        self._lock = threading.Lock()
-        self._stop = threading.Event()
-        self._stats_day = date.today().isoformat()
-        self._fail_delay_s = POLL_FAIL_MIN_S
-        self._last_logged_error: str | None = None
-        self._last_poll_ok_at: str | None = None
-        self._sad_cal = None if mock else load_sad_cal()
-        # SAD soft-tare: subtract from cal grams (KCP T does not affect SAD path).
-        self._sad_tare_g = 0.0
-        self._sad_raw_g = 0.0  # last grams before soft-tare (for Taara)
-        if self._sad_cal:
-            LOG.info(
-                "weight source=SAD (SI cal broken on this YKV); empty=%s ref=%s@%skg",
-                int(self._sad_cal["sad_empty"]),
-                int(self._sad_cal["sad_at_ref"]),
-                self._sad_cal["ref_kg"],
-            )
-        self._refresh_day()
-        if self.cfg.prefill_waste_g > 0:
-            self.machine.apply_baseline(self.cfg.prefill_waste_g)
 
     def _cfg_float(self, attr: str, env_name: str, default: float) -> float:
         """Env overrides file on first boot (lab CLI); file wins after admin save."""
@@ -122,25 +203,55 @@ class App:
                 pass
         return float(getattr(self.cfg, attr, default))
 
-    def apply_config(self, cfg: AppConfig) -> None:
+    def apply_config(self, cfg: AppConfig, *, rebuild_scales: bool = False) -> None:
         """Hot-reload machine params from saved config (lock held by caller)."""
+        old = self.cfg
         self.cfg = cfg
-        self.machine.apply_runtime_config(
-            threshold_g=cfg.threshold_g,
-            settle_s=cfg.settle_s,
-            empty_g=cfg.empty_g,
-            empty_away_s=cfg.empty_away_s,
-            start_delta_g=cfg.start_delta_g,
-            feedback_show_s=cfg.feedback_show_s,
-            quantize_g=cfg.quantize_g,
-            empty_bin_g=cfg.empty_bin_g,
-            empty_bin_tolerance_g=cfg.empty_bin_tolerance_g,
+        for slot, machine in self._machines().items():
+            machine.apply_runtime_config(
+                threshold_ok_g=cfg.threshold_ok_g,
+                threshold_g=cfg.threshold_g,
+                settle_s=cfg.settle_s,
+                empty_g=cfg.empty_g,
+                empty_away_s=cfg.empty_away_s,
+                start_delta_g=cfg.start_delta_g,
+                feedback_show_s=cfg.feedback_show_s,
+                quantize_g=cfg.quantize_g,
+                empty_bin_g=cfg.empty_bin_g,
+                empty_bin_tolerance_g=cfg.empty_bin_tolerance_g,
+                data_only=(slot == "c"),
+            )
+        need_rebuild = rebuild_scales or (
+            old.scale_layout != cfg.scale_layout
+            or old.scale_a_host != cfg.scale_a_host
+            or old.scale_a_port != cfg.scale_a_port
+            or old.scale_b_host != cfg.scale_b_host
+            or old.scale_b_port != cfg.scale_b_port
+            or old.scale_c_host != cfg.scale_c_host
+            or old.scale_c_port != cfg.scale_c_port
         )
+        if need_rebuild and not self.mock:
+            self._init_scales()
+        elif need_rebuild and self.mock:
+            # Ensure mocks exist for newly enabled slots
+            for slot in cfg.slots():
+                if self._scales()[slot] is None:
+                    self._set_scale(slot, MockScale())
+            for slot in ("a", "b", "c"):
+                if slot not in cfg.slots():
+                    sc = self._scales()[slot]
+                    if sc is not None:
+                        try:
+                            sc.close()
+                        except Exception:
+                            pass
+                    self._set_scale(slot, None)
         LOG.info(
-            "config applied threshold=%.0f settle=%.1f quantize=%.0f theme=%s",
+            "config applied layout=%s ok=%.0f frown=%.0f settle=%.1f theme=%s",
+            cfg.scale_layout,
+            cfg.threshold_ok_g,
             cfg.threshold_g,
             cfg.settle_s,
-            cfg.quantize_g,
             cfg.theme,
         )
 
@@ -154,12 +265,32 @@ class App:
         with self._lock:
             return self.cfg.to_dict()
 
+    def _stats_payload(self, stats) -> dict:
+        return {
+            "count": stats.count,
+            "total_g": round(stats.total_g, 1),
+            "avg_g": round(stats.avg_g, 1),
+            "max_g": round(stats.max_g, 1),
+            "min_g": round(stats.min_g, 1) if stats.min_g is not None else None,
+            "smile_count": stats.smile_count,
+            "ok_count": stats.ok_count,
+            "frown_count": stats.frown_count,
+        }
+
     def _refresh_day(self) -> None:
-        stats = self.storage.day_stats()
-        self.machine.state.day_count = stats.count
-        self.machine.state.day_total_g = stats.total_g
-        self.machine.state.day_avg_g = stats.avg_g
-        self.machine.state.day_max_g = stats.max_g
+        plate = self.storage.day_stats(scale_ids=PLATE_SCALE_IDS)
+        kitchen = self.storage.day_stats(scale_ids=KITCHEN_SCALE_IDS)
+        for machine in (self.machine_a, self.machine_b):
+            machine.state.day_count = plate.count
+            machine.state.day_total_g = plate.total_g
+            machine.state.day_avg_g = plate.avg_g
+            machine.state.day_max_g = plate.max_g
+            machine.state.day_min_g = plate.min_g
+        self.machine_c.state.day_count = kitchen.count
+        self.machine_c.state.day_total_g = kitchen.total_g
+        self.machine_c.state.day_avg_g = kitchen.avg_g
+        self.machine_c.state.day_max_g = kitchen.max_g
+        self.machine_c.state.day_min_g = kitchen.min_g
 
     def _maybe_rollover_day(self) -> None:
         """When calendar day changes, reload stats (new day starts at zero)."""
@@ -169,38 +300,125 @@ class App:
             self._stats_day = today
             self._refresh_day()
 
-    def _on_event(self, grams: float, feedback: str) -> None:
-        self.storage.add_event(grams, feedback)
+    def _on_event(self, grams: float, feedback: str, scale_id: str = "a") -> None:
+        self.storage.add_event(grams, feedback, scale_id=scale_id)
         self._refresh_day()
-        LOG.info("event %.1fg %s", grams, feedback)
+        LOG.info("event %s %.1fg %s", scale_id, grams, feedback)
 
-    def _apply_sad_soft_tare(self) -> None:
+    def _apply_sad_soft_tare(self, slot: str = "a") -> None:
         """Zero current SAD reading in software (lock held). No-op if not SAD mode."""
         if not self._sad_cal:
             return
-        self._sad_tare_g = float(self._sad_raw_g)
-        LOG.info("SAD soft-tare offset=%.1fg", self._sad_tare_g)
+        self._sad_tare_g[slot] = float(self._sad_raw_g.get(slot, 0.0))
+        LOG.info("SAD soft-tare %s offset=%.1fg", slot, self._sad_tare_g[slot])
 
-    def _on_auto_tare(self) -> None:
-        """Called from state machine (lock already held) when empty bin returns."""
+    def _on_auto_tare_a(self) -> None:
+        self._auto_tare_slot("a")
+
+    def _on_auto_tare_b(self) -> None:
+        self._auto_tare_slot("b")
+
+    def _on_auto_tare_c(self) -> None:
+        self._auto_tare_slot("c")
+
+    def _auto_tare_slot(self, slot: str) -> None:
+        scale = self._scales()[slot]
+        machine = self._machines()[slot]
+        if scale is None:
+            return
         try:
-            self._apply_sad_soft_tare()
-            resp = self.scale.tare()
-            LOG.info("auto-tare after emptying: %s", resp)
-            self.machine.state.error = None
+            self._apply_sad_soft_tare(slot)
+            resp = scale.tare()
+            LOG.info("auto-tare %s after emptying: %s", slot.upper(), resp)
+            machine.state.error = None
         except Exception as e:  # noqa: BLE001 — keep kiosk alive
-            LOG.warning("auto-tare failed: %s", e)
-            self.machine.state.error = friendly_scale_error(e)
+            LOG.warning("auto-tare %s failed: %s", slot, e)
+            machine.state.error = friendly_scale_error(e)
+
+    def _scale_snapshot(self, machine: StateMachine) -> dict:
+        d = machine.to_dict()
+        # Day totals live only at top-level (aggregated).
+        d.pop("day", None)
+        return d
+
+    def _stub_scale(self) -> dict:
+        return {
+            "phase": "idle",
+            "weight_g": 0.0,
+            "live_addition_g": 0.0,
+            "bin_weight_g": 0.0,
+            "stable": True,
+            "feedback": None,
+            "last_event_g": None,
+            "baseline_g": 0.0,
+            "connected": False,
+            "error": None,
+            "threshold_ok_g": self.cfg.threshold_ok_g,
+            "threshold_g": self.cfg.threshold_g,
+            "settle_s": self.cfg.settle_s,
+            "feedback_show_s": self.cfg.feedback_show_s,
+            "empty_g": self.cfg.empty_g,
+            "empty_away_s": self.cfg.empty_away_s,
+            "quantize_g": self.cfg.quantize_g,
+            "empty_bin_g": self.cfg.empty_bin_g,
+            "empty_bin_tolerance_g": self.cfg.empty_bin_tolerance_g,
+            "enabled": False,
+        }
 
     def snapshot(self) -> dict:
         with self._lock:
             self._maybe_rollover_day()
             cfg = self.cfg
-            return self.machine.to_dict() | {
+            slots = cfg.slots()
+            plate = self.storage.day_stats(scale_ids=PLATE_SCALE_IDS)
+            kitchen = self.storage.day_stats(scale_ids=KITCHEN_SCALE_IDS)
+            day = {
+                "count": plate.count,
+                "total_g": self.machine_a._round_display(plate.total_g),
+                "avg_g": self.machine_a._round_display(plate.avg_g),
+                "max_g": self.machine_a._round_display(plate.max_g),
+                "min_g": (
+                    self.machine_a._round_display(plate.min_g)
+                    if plate.min_g is not None
+                    else None
+                ),
+            }
+            day_kitchen = {
+                "count": kitchen.count,
+                "total_g": round(kitchen.total_g, 1),
+                "avg_g": round(kitchen.avg_g, 1),
+                "max_g": round(kitchen.max_g, 1),
+                "min_g": round(kitchen.min_g, 1) if kitchen.min_g is not None else None,
+            }
+            scales_out: dict[str, dict] = {}
+            for slot, machine in self._machines().items():
+                if slot in slots and self._scales()[slot] is not None:
+                    snap = self._scale_snapshot(machine)
+                    snap["enabled"] = True
+                    snap["label"] = SCALE_LABELS[slot]
+                    scales_out[slot] = snap
+                else:
+                    stub = self._stub_scale()
+                    stub["label"] = SCALE_LABELS[slot]
+                    scales_out[slot] = stub
+            flat_src = self.machine_a if "a" in slots else (
+                self.machine_c if "c" in slots else self.machine_a
+            )
+            flat = flat_src.to_dict()
+            return flat | {
                 "mode": "mock" if self.mock else "live",
                 "theme": cfg.theme,
                 "site_id": cfg.site_id,
+                "kiosk_title": cfg.kiosk_title,
+                "kiosk_location": cfg.kiosk_location,
+                "scale_layout": cfg.scale_layout,
+                "kiosk_enabled": layout_kiosk_enabled(cfg.scale_layout),
+                "diner_split": layout_diner_split(cfg.scale_layout),
+                "day": day,
+                "day_kitchen": day_kitchen,
+                "scales": scales_out,
                 "config": {
+                    "threshold_ok_g": cfg.threshold_ok_g,
                     "threshold_g": cfg.threshold_g,
                     "settle_s": cfg.settle_s,
                     "feedback_show_s": cfg.feedback_show_s,
@@ -210,50 +428,93 @@ class App:
                     "empty_bin_g": cfg.empty_bin_g,
                     "theme": cfg.theme,
                     "site_id": cfg.site_id,
+                    "kiosk_title": cfg.kiosk_title,
+                    "kiosk_location": cfg.kiosk_location,
+                    "scale_layout": cfg.scale_layout,
+                    "kiosk_enabled": layout_kiosk_enabled(cfg.scale_layout),
+                    "diner_split": layout_diner_split(cfg.scale_layout),
                     "feedback_smile_text": cfg.feedback_smile_text,
+                    "feedback_ok_text": cfg.feedback_ok_text,
                     "feedback_frown_text": cfg.feedback_frown_text,
                 },
             }
 
     def health(self) -> dict:
         with self._lock:
-            s = self.machine.state
+            cfg = self.cfg
+            slots = cfg.slots()
+            scales = []
+            for slot in ("a", "b", "c"):
+                machine = self._machines()[slot]
+                enabled = slot in slots
+                st = machine.state
+                scales.append(
+                    {
+                        "scale_id": slot,
+                        "label": SCALE_LABELS[slot],
+                        "enabled": enabled,
+                        "connected": bool(st.connected) if enabled else False,
+                        "error": st.error if enabled else None,
+                        "phase": st.phase.value if enabled else "idle",
+                        "last_event_g": st.last_event_g if enabled else None,
+                        "host": cfg.host_for(slot) if enabled else "",
+                        "port": cfg.port_for(slot) if enabled else None,
+                    }
+                )
+            any_conn = any(s["connected"] for s in scales if s["enabled"])
+            primary = next((s for s in scales if s["enabled"]), None)
             return {
                 "ok": True,
                 "mode": "mock" if self.mock else "live",
-                "connected": s.connected,
-                "error": s.error,
-                "phase": s.phase.value,
+                "connected": any_conn,
+                "error": primary["error"] if primary else None,
+                "phase": primary["phase"] if primary else "idle",
                 "last_poll_ok_at": self._last_poll_ok_at,
-                "last_event_g": s.last_event_g,
-                "site_id": self.cfg.site_id,
-                "theme": self.cfg.theme,
+                "last_event_g": primary["last_event_g"] if primary else None,
+                "site_id": cfg.site_id,
+                "theme": cfg.theme,
+                "scale_layout": cfg.scale_layout,
+                "kiosk_enabled": layout_kiosk_enabled(cfg.scale_layout),
+                "scales": scales,
             }
 
-    def tare(self) -> str:
+    def tare(self, scale_id: str = "a") -> str:
         """Tare current weight as empty bin (not waste); reset machine to idle zero."""
+        sid = (scale_id or "a").strip().lower()
         with self._lock:
-            self._apply_sad_soft_tare()
-            resp = self.scale.tare()
-            self.machine.apply_manual_tare_reset()
+            scale = self._scales().get(sid)
+            machine = self._machines().get(sid)
+            if scale is None or machine is None:
+                raise RuntimeError(f"vaaka {sid} ei käytössä")
+            self._apply_sad_soft_tare(sid)
+            resp = scale.tare()
+            machine.apply_manual_tare_reset()
             return resp
 
-    def zero(self) -> str:
+    def zero(self, scale_id: str = "a") -> str:
         """Scale hardware zero/tare baseline (not day counters)."""
+        sid = (scale_id or "a").strip().lower()
         with self._lock:
-            # SAD: soft-tare is the real zero; Z still sent for SI/mock compatibility.
-            self._apply_sad_soft_tare()
-            resp = self.scale.zero()
-            self.machine.apply_manual_tare_reset()
+            scale = self._scales().get(sid)
+            machine = self._machines().get(sid)
+            if scale is None or machine is None:
+                raise RuntimeError(f"vaaka {sid} ei käytössä")
+            self._apply_sad_soft_tare(sid)
+            resp = scale.zero()
+            machine.apply_manual_tare_reset()
             return resp
 
-    def set_baseline_current(self) -> dict:
+    def set_baseline_current(self, scale_id: str = "a") -> dict:
         """Treat current scale reading as baseline (pre-filled bin); no waste event."""
+        sid = (scale_id or "a").strip().lower()
         with self._lock:
-            w = float(self.machine.state.weight_g)
-            self.machine.apply_baseline(w)
-            LOG.info("manual baseline set to %.1fg (no waste count)", w)
-            return {"baseline_g": round(w, 1)}
+            machine = self._machines().get(sid)
+            if machine is None or sid not in self.cfg.slots():
+                raise RuntimeError(f"vaaka {sid} ei käytössä")
+            w = float(machine.state.weight_g)
+            machine.apply_baseline(w)
+            LOG.info("manual baseline %s set to %.1fg (no waste count)", sid, w)
+            return {"baseline_g": round(w, 1), "scale_id": sid}
 
     def export_day_files(self, day: str | None = None) -> dict:
         """Write CSV + JSON under data/exports/; return paths and summary."""
@@ -265,11 +526,15 @@ class App:
         json_path = EXPORTS / f"{base}.json"
         with self._lock:
             cfg = self.cfg
+            plate = self.storage.day_stats(day, scale_ids=PLATE_SCALE_IDS)
+            kitchen = self.storage.day_stats(day, scale_ids=KITCHEN_SCALE_IDS)
             csv_body = self.storage.export_day_csv(day)
             json_body = self.storage.export_day_json(
                 day,
                 site_id=cfg.site_id,
                 co2_factor_kg_per_kg=cfg.co2_factor_kg_per_kg,
+                plate_stats=plate,
+                kitchen_stats=kitchen,
             )
             stats = self.storage.day_stats(day)
         csv_path.write_text(csv_body, encoding="utf-8")
@@ -289,10 +554,14 @@ class App:
     def day_json_text(self, day: str | None = None) -> str:
         with self._lock:
             cfg = self.cfg
+        plate = self.storage.day_stats(day, scale_ids=PLATE_SCALE_IDS)
+        kitchen = self.storage.day_stats(day, scale_ids=KITCHEN_SCALE_IDS)
         return self.storage.export_day_json(
             day,
             site_id=cfg.site_id,
             co2_factor_kg_per_kg=cfg.co2_factor_kg_per_kg,
+            plate_stats=plate,
+            kitchen_stats=kitchen,
         )
 
     def reset_day(self, *, export_first: bool | None = None) -> dict:
@@ -316,97 +585,137 @@ class App:
                 "deleted": deleted,
                 "exported": exported,
                 "day": {
-                    "count": self.machine.state.day_count,
-                    "total_g": self.machine.state.day_total_g,
-                    "avg_g": self.machine.state.day_avg_g,
-                    "max_g": self.machine.state.day_max_g,
+                    "count": self.machine_a.state.day_count,
+                    "total_g": self.machine_a.state.day_total_g,
+                    "avg_g": self.machine_a.state.day_avg_g,
+                    "max_g": self.machine_a.state.day_max_g,
+                    "min_g": self.machine_a.state.day_min_g,
+                },
+                "day_kitchen": {
+                    "count": self.machine_c.state.day_count,
+                    "total_g": self.machine_c.state.day_total_g,
                 },
             }
 
-    def demo_add(self, grams: float) -> None:
-        if not isinstance(self.scale, MockScale):
-            raise RuntimeError("demo add only in mock mode")
-        with self._lock:
-            self.scale.add_grams(grams)
+    def _demo_scale(self, scale_id: str) -> MockScale:
+        sid = (scale_id or "a").strip().lower()
+        scale = self._scales().get(sid)
+        if not isinstance(scale, MockScale):
+            raise RuntimeError(f"demo {sid.upper()} only in mock mode / enabled slot")
+        return scale
 
-    def demo_set(self, grams: float) -> None:
-        if not isinstance(self.scale, MockScale):
-            raise RuntimeError("demo set only in mock mode")
+    def demo_add(self, grams: float, scale_id: str = "a") -> None:
         with self._lock:
-            self.scale.weight_g = grams
+            self._demo_scale(scale_id).add_grams(grams)
+
+    def demo_set(self, grams: float, scale_id: str = "a") -> None:
+        with self._lock:
+            self._demo_scale(scale_id).weight_g = grams
 
     def _switch_to_mock_fallback(self, reason: str) -> None:
         """Optional lab escape hatch — only when HAVIKKI_ALLOW_MOCK_FALLBACK=1."""
         if self.mock or not _env_truthy("HAVIKKI_ALLOW_MOCK_FALLBACK"):
             return
         LOG.warning("mock fallback enabled after scale failure: %s", reason)
-        try:
-            self.scale.close()
-        except Exception:
-            pass
-        self.scale = MockScale()
         self.mock = True
+        self._init_scales()
         with self._lock:
-            self.machine.state.connected = True
-            self.machine.state.error = None
+            for machine in self._machines().values():
+                machine.state.connected = True
+                machine.state.error = None
+
+    def _poll_one(
+        self,
+        *,
+        scale: KcpClient | MockScale,
+        machine: StateMachine,
+        use_sad: bool,
+        label: str,
+    ) -> None:
+        if not scale.connected:
+            scale.connect()
+        if use_sad and isinstance(scale, KcpClient) and self._sad_cal:
+            sad = scale.sad()
+            raw_g = grams_from_sad(sad, self._sad_cal)
+            with self._lock:
+                self._sad_raw_g[label] = raw_g
+                value = raw_g - self._sad_tare_g.get(label, 0.0)
+                machine.state.connected = True
+                machine.state.error = None
+                machine.update(value, stable=True)
+                self._last_poll_ok_at = datetime.now(timezone.utc).isoformat()
+        else:
+            status, value, _unit = scale.si()
+            with self._lock:
+                machine.state.connected = True
+                machine.state.error = None
+                if value is not None:
+                    stable = status == "S"
+                    machine.update(value, stable=stable)
+                self._last_poll_ok_at = datetime.now(timezone.utc).isoformat()
 
     def poll_loop(self) -> None:
         while not self._stop.is_set():
-            try:
-                if not self.scale.connected:
-                    self.scale.connect()
-                if self._sad_cal and isinstance(self.scale, KcpClient):
-                    sad = self.scale.sad()
-                    raw_g = grams_from_sad(sad, self._sad_cal)
-                    status = "S"
+            with self._lock:
+                slots = list(self.cfg.slots())
+                scales = {s: self._scales()[s] for s in slots}
+                machines = {s: self._machines()[s] for s in slots}
+            if not slots:
+                time.sleep(POLL_FAIL_MIN_S)
+                continue
+            any_ok = False
+            primary_err: BaseException | None = None
+            for label in slots:
+                scale = scales.get(label)
+                machine = machines.get(label)
+                if scale is None or machine is None:
+                    continue
+                try:
+                    self._poll_one(
+                        scale=scale,
+                        machine=machine,
+                        use_sad=bool(self._sad_cal),
+                        label=label,
+                    )
+                    any_ok = True
+                except Exception as e:  # noqa: BLE001
+                    friendly = friendly_scale_error(e)
                     with self._lock:
-                        self._sad_raw_g = raw_g
-                        value = raw_g - self._sad_tare_g
-                        self.machine.state.connected = True
-                        self.machine.state.error = None
-                        stable = status == "S"
-                        self.machine.update(value, stable=stable)
-                        self._last_poll_ok_at = datetime.now(timezone.utc).isoformat()
-                else:
-                    status, value, _unit = self.scale.si()
-                    with self._lock:
-                        self.machine.state.connected = True
-                        self.machine.state.error = None
-                        if value is not None:
-                            stable = status == "S"
-                            self.machine.update(value, stable=stable)
-                        self._last_poll_ok_at = datetime.now(timezone.utc).isoformat()
+                        machine.state.connected = False
+                        machine.state.error = friendly
+                    raw = str(e)
+                    if raw != self._last_logged_error:
+                        LOG.warning("scale poll %s: %s → %s", label.upper(), raw, friendly)
+                        self._last_logged_error = raw
+                    try:
+                        scale.close()
+                    except Exception:
+                        pass
+                    if label == slots[0]:
+                        primary_err = e
+            if any_ok:
                 self._fail_delay_s = POLL_FAIL_MIN_S
                 self._last_logged_error = None
                 time.sleep(POLL_OK_S)
-            except Exception as e:  # noqa: BLE001 — keep kiosk alive
-                friendly = friendly_scale_error(e)
-                with self._lock:
-                    self.machine.state.connected = False
-                    self.machine.state.error = friendly
-                # Log once per distinct OS error text to avoid journal spam.
-                raw = str(e)
-                if raw != self._last_logged_error:
-                    LOG.warning("scale poll: %s → %s", raw, friendly)
-                    self._last_logged_error = raw
-                try:
-                    self.scale.close()
-                except Exception:
-                    pass
-                self._switch_to_mock_fallback(raw)
+                continue
+            if primary_err is not None:
+                self._switch_to_mock_fallback(str(primary_err))
                 if self.mock:
                     self._fail_delay_s = POLL_FAIL_MIN_S
                     continue
-                delay = self._fail_delay_s
-                self._fail_delay_s = min(POLL_FAIL_MAX_S, self._fail_delay_s * 2)
-                time.sleep(delay)
+            delay = self._fail_delay_s
+            self._fail_delay_s = min(POLL_FAIL_MAX_S, self._fail_delay_s * 2)
+            time.sleep(delay)
 
     def stop(self) -> None:
         self._stop.set()
-        try:
-            self.scale.close()
-        except Exception:
-            pass
+        for sc in self._scales().values():
+            if sc is None:
+                continue
+            try:
+                sc.close()
+            except Exception:
+                pass
 
 
 def make_handler(app: App):
@@ -475,21 +784,28 @@ def make_handler(app: App):
                     offset = int((qs.get("offset") or ["0"])[0])
                 except ValueError:
                     limit, offset = 100, 0
-                events = app.storage.list_events(day=day, limit=limit, offset=offset)
-                stats = app.storage.day_stats(day)
+                scope = (qs.get("scope") or ["all"])[0].strip().lower()
+                if scope == "plate":
+                    scale_ids: frozenset[str] | None = PLATE_SCALE_IDS
+                elif scope == "kitchen":
+                    scale_ids = KITCHEN_SCALE_IDS
+                else:
+                    scale_ids = None
+                events = app.storage.list_events(
+                    day=day, limit=limit, offset=offset, scale_ids=scale_ids
+                )
+                stats = app.storage.day_stats(day, scale_ids=scale_ids)
+                plate = app.storage.day_stats(day, scale_ids=PLATE_SCALE_IDS)
+                kitchen = app.storage.day_stats(day, scale_ids=KITCHEN_SCALE_IDS)
                 self._json(
                     200,
                     {
                         "ok": True,
                         "day": day or date.today().isoformat(),
-                        "stats": {
-                            "count": stats.count,
-                            "total_g": round(stats.total_g, 1),
-                            "avg_g": round(stats.avg_g, 1),
-                            "max_g": round(stats.max_g, 1),
-                            "smile_count": stats.smile_count,
-                            "frown_count": stats.frown_count,
-                        },
+                        "scope": scope,
+                        "stats": app._stats_payload(stats),
+                        "plate": app._stats_payload(plate),
+                        "kitchen": app._stats_payload(kitchen),
                         "events": events,
                     },
                 )
@@ -528,10 +844,12 @@ def make_handler(app: App):
 
             try:
                 if path == "/api/tare":
-                    self._json(200, {"ok": True, "resp": app.tare()})
+                    sid = str(data.get("scale", data.get("scale_id", "a")))
+                    self._json(200, {"ok": True, "resp": app.tare(sid)})
                 elif path == "/api/zero":
                     # Scale hardware zero (kept for tools); UI Nollaa uses reset-day
-                    self._json(200, {"ok": True, "resp": app.zero()})
+                    sid = str(data.get("scale", data.get("scale_id", "a")))
+                    self._json(200, {"ok": True, "resp": app.zero(sid)})
                 elif path == "/api/reset-day":
                     export_first = data.get("export_first")
                     if export_first is None:
@@ -546,7 +864,8 @@ def make_handler(app: App):
                     cfg = app.update_config(data)
                     self._json(200, {"ok": True, "config": cfg.to_dict()})
                 elif path == "/api/set-baseline":
-                    self._json(200, {"ok": True, **app.set_baseline_current()})
+                    sid = str(data.get("scale", data.get("scale_id", "a")))
+                    self._json(200, {"ok": True, **app.set_baseline_current(sid)})
                 elif path == "/api/export/day":
                     # Save CSV+JSON to data/exports/ (admin "Vie raportti")
                     day = data.get("day")
@@ -554,11 +873,13 @@ def make_handler(app: App):
                     self._json(200, {"ok": True, **result})
                 elif path == "/api/demo/add":
                     grams = float(data.get("grams", 100))
-                    app.demo_add(grams)
+                    scale = str(data.get("scale", "a"))
+                    app.demo_add(grams, scale)
                     self._json(200, {"ok": True})
                 elif path == "/api/demo/set":
                     grams = float(data.get("grams", 0))
-                    app.demo_set(grams)
+                    scale = str(data.get("scale", "a"))
+                    app.demo_set(grams, scale)
                     self._json(200, {"ok": True})
                 else:
                     self.send_error(404)
@@ -606,11 +927,14 @@ def main(argv: list[str] | None = None) -> int:
         LOG.info("HAVIKKI_MOCK set — starting in mock mode")
     app = App(mock=use_mock, host=args.host, port=args.port)
     if args.settle_s is not None:
-        app.machine.settle_s = args.settle_s
+        for m in app._machines().values():
+            m.settle_s = args.settle_s
     if args.empty_away_s is not None:
-        app.machine.empty_away_s = args.empty_away_s
+        for m in app._machines().values():
+            m.empty_away_s = args.empty_away_s
     if args.empty_g is not None:
-        app.machine.empty_g = args.empty_g
+        for m in app._machines().values():
+            m.empty_g = args.empty_g
 
     t = threading.Thread(target=app.poll_loop, name="scale-poll", daemon=True)
     t.start()
@@ -618,14 +942,13 @@ def main(argv: list[str] | None = None) -> int:
     handler = make_handler(app)
     httpd = ThreadingHTTPServer((args.http_host, args.http_port), handler)
     LOG.info(
-        "Kiosk http://%s:%s  admin http://%s:%s/admin  mode=%s scale=%s:%s",
+        "Kiosk http://%s:%s  admin http://%s:%s/admin  mode=%s layout=%s",
         args.http_host,
         args.http_port,
         args.http_host,
         args.http_port,
         "mock" if use_mock else "live",
-        args.host,
-        args.port,
+        app.cfg.scale_layout,
     )
     try:
         httpd.serve_forever()

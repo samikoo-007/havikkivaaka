@@ -9,7 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Collection
 
 
 @dataclass
@@ -18,7 +18,9 @@ class DayStats:
     total_g: float
     avg_g: float
     max_g: float
+    min_g: float | None = None
     smile_count: int = 0
+    ok_count: int = 0
     frown_count: int = 0
 
 
@@ -42,34 +44,68 @@ class Storage:
                   ts TEXT NOT NULL,
                   grams REAL NOT NULL,
                   feedback TEXT NOT NULL,
-                  day TEXT NOT NULL
+                  day TEXT NOT NULL,
+                  scale_id TEXT NOT NULL DEFAULT 'a'
                 );
                 """
             )
+            cols = {
+                str(r[1])
+                for r in conn.execute("PRAGMA table_info(events)").fetchall()
+            }
+            if "scale_id" not in cols:
+                conn.execute(
+                    "ALTER TABLE events ADD COLUMN scale_id TEXT NOT NULL DEFAULT 'a'"
+                )
 
-    def add_event(self, grams: float, feedback: str) -> None:
+    def add_event(
+        self,
+        grams: float,
+        feedback: str,
+        *,
+        scale_id: str = "a",
+    ) -> None:
         now = datetime.now(timezone.utc).isoformat()
         day = date.today().isoformat()
+        sid = (scale_id or "a").strip().lower()[:8] or "a"
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO events (ts, grams, feedback, day) VALUES (?, ?, ?, ?)",
-                (now, grams, feedback, day),
+                "INSERT INTO events (ts, grams, feedback, day, scale_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (now, grams, feedback, day, sid),
             )
 
-    def day_stats(self, day: str | None = None) -> DayStats:
+    def day_stats(
+        self,
+        day: str | None = None,
+        *,
+        scale_ids: Collection[str] | None = None,
+    ) -> DayStats:
         day = day or date.today().isoformat()
         with self._connect() as conn:
+            if scale_ids is None:
+                where = "day = ?"
+                params: list[Any] = [day]
+            else:
+                ids = [str(s).strip().lower() for s in scale_ids if str(s).strip()]
+                if not ids:
+                    return DayStats(0, 0.0, 0.0, 0.0, None)
+                placeholders = ",".join("?" for _ in ids)
+                where = f"day = ? AND scale_id IN ({placeholders})"
+                params = [day, *ids]
             row = conn.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS c,
                        COALESCE(SUM(grams), 0) AS total,
                        COALESCE(AVG(grams), 0) AS avg,
                        COALESCE(MAX(grams), 0) AS mx,
+                       MIN(grams) AS mn,
                        COALESCE(SUM(CASE WHEN feedback = 'smile' THEN 1 ELSE 0 END), 0) AS smiles,
+                       COALESCE(SUM(CASE WHEN feedback = 'ok' THEN 1 ELSE 0 END), 0) AS oks,
                        COALESCE(SUM(CASE WHEN feedback = 'frown' THEN 1 ELSE 0 END), 0) AS frowns
-                FROM events WHERE day = ?
+                FROM events WHERE {where}
                 """,
-                (day,),
+                params,
             ).fetchone()
         c = int(row["c"])
         return DayStats(
@@ -77,7 +113,9 @@ class Storage:
             total_g=float(row["total"]),
             avg_g=float(row["avg"]) if c else 0.0,
             max_g=float(row["mx"]) if c else 0.0,
+            min_g=float(row["mn"]) if c and row["mn"] is not None else None,
             smile_count=int(row["smiles"]),
+            ok_count=int(row["oks"]),
             frown_count=int(row["frowns"]),
         )
 
@@ -86,19 +124,31 @@ class Storage:
         day: str | None = None,
         limit: int = 200,
         offset: int = 0,
+        *,
+        scale_ids: Collection[str] | None = None,
     ) -> list[dict[str, Any]]:
         day = day or date.today().isoformat()
         limit = max(1, min(int(limit), 2000))
         offset = max(0, int(offset))
         with self._connect() as conn:
+            if scale_ids is None:
+                where = "day = ?"
+                params: list[Any] = [day, limit, offset]
+            else:
+                ids = [str(s).strip().lower() for s in scale_ids if str(s).strip()]
+                if not ids:
+                    return []
+                placeholders = ",".join("?" for _ in ids)
+                where = f"day = ? AND scale_id IN ({placeholders})"
+                params = [day, *ids, limit, offset]
             rows = conn.execute(
-                """
-                SELECT id, ts, grams, feedback, day
-                FROM events WHERE day = ?
+                f"""
+                SELECT id, ts, grams, feedback, day, scale_id
+                FROM events WHERE {where}
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
                 """,
-                (day, limit, offset),
+                params,
             ).fetchall()
         return [
             {
@@ -107,6 +157,7 @@ class Storage:
                 "grams": float(r["grams"]),
                 "feedback": r["feedback"],
                 "day": r["day"],
+                "scale_id": r["scale_id"] or "a",
             }
             for r in rows
         ]
@@ -116,7 +167,7 @@ class Storage:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, ts, grams, feedback, day
+                SELECT id, ts, grams, feedback, day, scale_id
                 FROM events WHERE day = ?
                 ORDER BY id ASC
                 """,
@@ -129,6 +180,7 @@ class Storage:
                 "grams": float(r["grams"]),
                 "feedback": r["feedback"],
                 "day": r["day"],
+                "scale_id": r["scale_id"] or "a",
             }
             for r in rows
         ]
@@ -138,7 +190,7 @@ class Storage:
         buf = io.StringIO()
         writer = csv.DictWriter(
             buf,
-            fieldnames=["id", "ts", "grams", "feedback", "day"],
+            fieldnames=["id", "ts", "grams", "feedback", "day", "scale_id"],
             lineterminator="\n",
         )
         writer.writeheader()
@@ -152,12 +204,14 @@ class Storage:
         *,
         site_id: str | None = None,
         co2_factor_kg_per_kg: float = 0.0,
+        plate_stats: DayStats | None = None,
+        kitchen_stats: DayStats | None = None,
     ) -> str:
         day = day or date.today().isoformat()
         rows = self.export_day_rows(day)
         stats = self.day_stats(day)
         total_kg = stats.total_g / 1000.0
-        payload = {
+        payload: dict[str, Any] = {
             "day": day,
             "site_id": site_id,
             "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -167,7 +221,9 @@ class Storage:
                 "total_kg": round(total_kg, 3),
                 "avg_g": round(stats.avg_g, 1),
                 "max_g": round(stats.max_g, 1),
+                "min_g": round(stats.min_g, 1) if stats.min_g is not None else None,
                 "smile_count": stats.smile_count,
+                "ok_count": stats.ok_count,
                 "frown_count": stats.frown_count,
                 "co2_kg": round(total_kg * float(co2_factor_kg_per_kg), 3)
                 if co2_factor_kg_per_kg
@@ -175,6 +231,18 @@ class Storage:
             },
             "events": rows,
         }
+        if plate_stats is not None:
+            payload["plate"] = {
+                "count": plate_stats.count,
+                "total_g": round(plate_stats.total_g, 1),
+                "total_kg": round(plate_stats.total_g / 1000.0, 3),
+            }
+        if kitchen_stats is not None:
+            payload["kitchen"] = {
+                "count": kitchen_stats.count,
+                "total_g": round(kitchen_stats.total_g, 1),
+                "total_kg": round(kitchen_stats.total_g / 1000.0, 3),
+            }
         return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
     def clear_day(self, day: str | None = None) -> int:

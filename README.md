@@ -39,7 +39,7 @@ sudo ./scripts/enable-ykv-link.sh
 
 **Systemd mock (UI-työ Lenovolla, YKV pois):** drop-in `havikki-kiosk-app.service.d/mock.conf` + `sudo systemctl stop/disable havikki-ykv-link` + `sudo ./scripts/disable-ykv-link.sh`. Live takaisin: poista drop-in, palauta `.bak-live` tarvittaessa, `enable --now havikki-ykv-link`, `restart havikki-kiosk-app` — tai `./scripts/start-kiosk.sh --live`. Katso `system_architecture.md` → *Lab UI mode*.
 
-Kiosk: http://127.0.0.1:8080/ — napit Taara / Nollaa; mockissa myös +150 g / +400 g / Tyhjennä.
+Kiosk: http://127.0.0.1:8080/ — dual-scale display-only (A\|B); mockissa esittelynapit A/B. Taara / Nollaa / asetukset → `/admin`.
 
 ## Admin
 

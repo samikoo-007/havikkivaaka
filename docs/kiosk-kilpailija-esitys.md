@@ -2,8 +2,9 @@
 
 **Agentti 3** · ehdotus hyväksyttäväksi · **ei toteutusta tässä vaiheessa**  
 **Peruste:** `docs/kilpailija-ominaisuusanalyysi.md` (Agentti 1) + nykyinen kiosk (`app/static/index.html`, `app/state_machine.py`)  
-**Päivitetty:** 2026-09-10  
-**Ajoitus:** lopullinen kiosk-toteutus **YKV-toimintatestin jälkeen** (Lenovo = testikokoonpano). Vaiheet: [`roadmap-deployment.md`](roadmap-deployment.md).
+**Päivitetty:** 2026-09-22  
+**Ajoitus:** lopullinen kiosk-toteutus **YKV-toimintatestin jälkeen** (Lenovo = testikokoonpano). Vaiheet: [`roadmap-deployment.md`](roadmap-deployment.md).  
+**UI-lock 2026-09-22:** dual-scale peilattu A\|B (yhtenäinen paneli: palaute + paino), display-only FullHD, yhteistilastot (`kpl` · `kg` · `keskimäärin g / palautus` · `Päivän pienin g`), 3-portainen palaute → roadmap §3.
 
 ---
 
@@ -28,20 +29,20 @@ Prioriteetti: **Must** → **Should** → **Could**. Kukin kohta on ehdotus tote
 
 ### Must
 
-#### M1 — Kosketukseen optimoitu layout
+#### M1 — Display-only layout (ei kosketusta) — **hyväksytty / lukittu 2026-09-22**
 - **Kilpailijat:** Biovaaka Serve; Leanpath Spark (diner-näyttö)
-- **Miksi:** Palautuspisteessä käyttäjä on seisten, käsissä tarjotin; pienet napit ja demokontrollit häiritsevät. Live-tilassa vain iso palaute + paino + päivän yhteenveto.
-- **UX-luonnos:** Koko näyttö kaksi isoa aluetta (palaute | paino). Hit-targetit ≥ ~48–64 px. Mock-painikkeet (+150 / +400 / Tyhjennä) näkyvät vain `mode=mock`; live-tilassa ei demoriviä.
+- **Miksi:** Palautuspisteessä käyttäjä on seisten, käsissä tarjotin; napit häiritsevät. Tuotantonäyttö on **tyhmä** FullHD 27″ (~1 m lukuetäisyys), ei kosketusta.
+- **UX-luonnos:** Dual-scale peilattu A\|B: palaute + paino per puoli; alalaidassa yhteistilastot. Ei Taara/Nollaa. Mock-painikkeet (+150 / +400 / Tyhjennä) vain esittelytilassa.
 
 #### M2 — Selkeämpi palautevaihe (väri + iso symboli + lyhyt teksti)
 - **Kilpailijat:** Biovaaka Serve / Uusiouutiset (vihreä–keltainen–punainen); nykyinen hymy/suru pohjana
-- **Miksi:** Välitön, ymmärrettävä palaute on ainoa “tuotehetki” ruokailijalle — sen pitää olla luettavissa 2–3 metristä ilman ohjetta.
-- **UX-luonnos:** Settling = keltainen “tasaantuu…”. Smile = vihreä + ☺ + 1 lyhyt lause. Frown = punainen + ☹ + 1 lyhyt lause. Teksti max ~2 riviä; ei teknisiä phase-koodeja asiakkaalle.
+- **Miksi:** Välitön, ymmärrettävä palaute on ainoa “tuotehetki” ruokailijalle — luettavissa ~1 m etäisyydeltä 27″ näytöltä.
+- **UX-luonnos:** Settling = keltainen “tasaantuu…”. Smile = vihreä + ☺. Ok = keltainen + neutraali (S2). Frown = punainen + ☹. Teksti max ~2 riviä; ei teknisiä phase-koodeja asiakkaalle.
 
-#### M3 — Henkilökuntatoiminnot erilleen (PIN / pitkä painallus)
+#### M3 — Henkilökuntatoiminnot Adminissa — **hyväksytty / lukittu 2026-09-22**
 - **Kilpailijat:** SaaS-kioskit erottavat staff-toiminnot; Serve-keittiö määrittelee rajat erikseen adminissa
-- **Miksi:** Taara ja etenkin “Nollaa” (päivän nollaus) ovat vaarallisia asiakkaan sormille — yksi vahinko tyhjentää päivän tilastot.
-- **UX-luonnos:** Normaalinäkymässä ei Taara/Nollaa. Huoltovalikko aukeaa esim. 3 s painalluksella nurkasta tai 4-numeroisella PIN:llä → sitten Taara / Nollaa / (debug). Sulkeutuu idle-timeoutilla.
+- **Miksi:** Näyttö ilman kosketusta → PIN/huoltovalikko kioskissa ei ole tarpeen. Taara ja päivän nollaus ovat vaarallisia vahingossa.
+- **UX-luonnos:** Kioskissa ei Taara/Nollaa. Kaikki huolto Adminissa (kytkin/LAN): Taara, Nollaa, baseline, esittelymock.
 
 #### M4 — Yhteyskatkon UI vahvistettuna
 - **Kilpailijat:** Leanpath/Sensire “device health”; meillä jo ystävälliset virheet
@@ -62,15 +63,15 @@ Prioriteetti: **Must** → **Should** → **Could**. Kukin kohta on ehdotus tote
 - **Miksi:** Sama “Ota vähemmän”-viesti ei toimi alakoulussa ja hotellibuffetissa; sävy vaikuttaa siihen, otetaanko palaute vastaan vai ärsyynnytäänkö.
 - **UX-luonnos:** Profiilit esim. `koulu` | `buffet` | `hotelli`. Smile/frown-tekstit vaihtuvat; värit/symbolit samat. Valinta admin/config — ei kioskin asiakasnappia.
 
-#### S2 — Kolmiportainen palaute (hyvä / ok / paljon)
+#### S2 — Kolmiportainen palaute (hyvä / ok / paljon) — **hyväksytty / lukittu 2026-09-22**
 - **Kilpailijat:** Serve / Uusiouutiset (keltainen väli vihreän ja punaisen välissä)
 - **Miksi:** Binääri hymy/suru tuntuu ankaralta ~280–320 g rajalla; “ok”-portaan pehmentää kokemusta ja ohjaa paremmin.
-- **UX-luonnos:** Kaksi kynnystä (esim. hyvä &lt; 200 g, ok 200–300 g, paljon ≥ 300 g — arvot config). Keltainen kortti + neutraali symboli + lyhyt “ihan ok, voit vielä parantaa” -tyylinen viesti. Vaatii tilakoneen `feedback`-laajennuksen (`smile` | `ok` | `frown`).
+- **UX-luonnos:** Kaksi kynnystä (esim. hyvä &lt; 200 g, ok 200–300 g, paljon ≥ 300 g — arvot config). Keltainen kortti + neutraali symboli + kannustava koulu-/aikuisopiskelija-viesti. Tilakone: `smile` | `ok` | `frown`. Esim. *Hienoa — pieni hävikki tänään.* / *Ihan ok — seuraavalla kerralla voit ottaa vähän vähemmän.* / *Kiitos palautuksesta — pienempi annos säästää ja maistuu usein paremmin.*
 
-#### S3 — Asiakkalle vain live-lisäys + päivän kg; tekniikka piiloon
+#### S3 — Asiakkalle palaute + paino + päivän yhteenveto; tekniikka Adminiin — **hyväksytty / lukittu 2026-09-22**
 - **Kilpailijat:** Serve/Spark näyttävät ruokailijalle tuloksen, ei “MOCK · kytketty”
-- **Miksi:** Headerin mode/conn ja neljä pientä tilastokorttia kilpailevat huomion kanssa; asiakas tarvitsee “oma hävikki” + ehkä “yhteensä tänään”.
-- **UX-luonnos:** Oletus: paino + palaute + yksi “Tänään: X kg / N ruokailijaa”. Mode, conn, max g, keskiarvo → debug/huoltovalikko (M3).
+- **Miksi:** Headerin mode/conn kilpailee huomion kanssa; asiakas tarvitsee oman hävikin + päivän yhteenvedon.
+- **UX-luonnos:** Kiosk: palaute + *Ruokahävikkisi tänään* per vaaka (yksi paneli / vaaka) + footer: `N kpl` · `N kg` · `N keskimäärin g / palautus` · `N Päivän pienin g` (luku ja label peräkkäin; ei “tänään”-labeleita). Mode, conn, per-scale health → **Admin**. Ei “max g” / ennätyskieltä.
 
 #### S4 — Saavutettavuus (kontrasti, ei pelkkä väri, fontti)
 - **Kilpailijat:** Julkisten ruokailujen vaatimukset; Leanpath diner-näytöt
@@ -106,10 +107,11 @@ Prioriteetti: **Must** → **Should** → **Could**. Kukin kohta on ehdotus tote
 - **Miksi:** M5:n jälkeen nopea EN/SV-vaihto ruokailijalle ilman adminia.
 - **UX-luonnos:** Pieni kielinappi nurkassa; vaihtaa sanaston heti; ei vaikuta dataan.
 
-#### C4 — Kaksi vaakaa / kaksi astiaa samassa UI:ssa
+#### C4 — Kaksi vaakaa / kaksi astiaa samassa UI:ssa — **hyväksytty / lukittu 2026-09-22** (siirtyy vaihe 3 -mustiksi)
 - **Kilpailijat:** Serve skaalaa ketjulla; oma `system_architecture.md` prod-visio (Pi + 2× YKV)
 - **Miksi:** Ruuhkainen palautuslinja — kaksi pistettä yhdellä näytöllä.
-- **UX-luonnos:** Split-view A | B, kummallakin oma paino/palaute; tai automaattinen fokus aktiiviseen vaakaan.
+- **UX-luonnos (lukittu):** Peilattu split A vasen | B oikea; ei vaakanimiä diner-UI:ssa; molemmat palautealueet itsenäisiä (yhtäaikainen palaute OK); footer **yhteistilastot** molemmilta (ei erittelyä).
+- **Laajennus 2026-09-22 (lukittu + toteutettu):** sallitut kokoonpanot **A** \| **A+B** \| **A+C** \| **A+B+C** \| **C**. A tai A+C → kiosk **koko leveys**. Vain C → **ei kiosk-tilaa**. C = tietojen keruu ilman palautetta; tilastot **aina erillään**. Admin-nimet kiinteät; hostit Admin UI:sta; (i)-hover.
 
 #### C5 — Valinnainen hiljainen äänipalaute
 - **Kilpailijat:** Saavutettavuus; harvinainen diner-kioskeissa
@@ -131,18 +133,25 @@ Näitä **ei** ehdoteta kiosk-toteutukseen:
 | AI-ruokalajitunnistus, kamera, Throw & Go -keittiöpino | Ei prioriteetti; eri use case (Winnow/Orbisk/KITRO) |
 | Asennuspalvelu avaimet käteen | Liiketoiminta / Serve-tyyppinen palvelu, ei UI |
 
-Kiosk kuluttaa `GET /api/state` (+ myöhemmin config-luku); kirjoitus vain suojattuihin tare/reset -toimintoihin.
+Kiosk kuluttaa `GET /api/state` (display-only). Taara / reset / mock-demo → **vain Admin** (ei kiosk-kirjoitusta tuotannossa).
 
 ---
 
 ## 4. Hyväksyntä
 
-**Hyväksy ominaisuudet M1–M5** (kosketuslayout, palautevaihe, henkilökuntasuoja, yhteyskatko-UI, locale), niin ne toteutetaan ensimmäisenä kiosk-sprintissä.
+**Lukittu 2026-09-22 (dual-scale UI -suunnittelu):**
 
-Halutessasi mukaan heti: **S1–S3** (viestisävyt, kolmiportainen palaute, asiakasnäkymän siivous) — suositeltu “Should”-paketti samaan tai seuraavaan sprinttiin.
+| ID | Päätös |
+|----|--------|
+| M1 | Display-only FullHD; ei kosketusta / hit-targettejä |
+| M3 | Staff-toiminnot Adminissa (ei PIN-kioskia) |
+| S2 | Kolmiportainen palaute roadmapiin / dual-UI:hin |
+| S3 | Tekniikka (mode/conn) Adminiin; footer: kpl · kg · keskimäärin g/palautus · Päivän pienin g |
+| C4 | A full-width \| A+B split; layouts A / A+B / A+C / A+B+C / C; vain C = ei kioskia; C data-only erilliset tilastot |
+| S5 | Privacy-lupaus: **ei** näytölle |
 
-**Could (C1–C5)** jätetään odottamaan erillistä hyväksyntää seinänäyttö-/hotelli-/2-vaaka-tarpeen mukaan.
+Vielä avoinna kiosk-sprinttiin: **M2** (palautevisuaali), **M4** (yhteyskatko per vaaka), **M5** (locale), **S1** (viestiprofiilit), **S4/S6**, Could C1–C3/C5. Vaakamäärä/nimet/(i)-ohjeet → Admin backlog **M-A10 / M-A11**.
 
 ---
 
-*Ehdotus vain. Ei muutoksia `index.html`-tiedostoon tai muuhun koodiin ennen erillistä toteutuspyyntöä.*
+*UI-koodia (`index.html`) ei muuteta ennen erillistä toteutuspyyntöä mockup-hyväksynnän jälkeen.*

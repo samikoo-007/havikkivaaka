@@ -11,7 +11,7 @@
 |-------|------|--------|------------|
 | **1 — Testikokoonpano (nyt)** | YKV-02 + SAD-paino, tilakone, kiosk/admin lab-UI, offline-LAN admin | Lenovo E31-80 + lab `192.168.50.0/24` | **Live OK (2026-09-22):** paino SAD-calilla, hymy/suru, boot-kiosk |
 | **2 — Repo = toistettava asennus** | Kaikki labissa tehdyt asennus- ja verkkoaskeleet skripteinä + dokumentoituna | Tämä git-repo | Puhdas Ubuntu + repo → bootstrap → sama käyttäytyminen kuin labissa (ilman manuaalista “muistinvaraista” työtä) |
-| **3 — Lopullinen kiosk + admin** | Vasta **YKV-toimintatestin jälkeen**: layout, dual-scale, raportit, kynnykset, health, PIN/auth tms. backlog | Kehitys Lenovolla (tai kloonilla), muutokset repoon | Hyväksytty dealer/demo-UI + admin kytkimellä |
+| **3 — Lopullinen kiosk + admin** | Vasta **YKV-toimintatestin jälkeen**: layouts A / A+B / A+C / A+B+C / C, A full-width, ei kioskia jos vain C, admin hostit + (i)-hover, raportit (C erillään), kynnykset, health, PIN/auth tms. backlog | Kehitys Lenovolla (tai kloonilla), muutokset repoon | Hyväksytty dealer/demo-UI + admin kytkimellä |
 | **4 — Kloonaus tuotantokoneelle** | Valmis testikuva → toinen miniPC / Ubuntu-host | ISO / bootable USB / skriptiasennus (alla) | Uusi kone buuttaa kioskiin ja yhdistyy YKV:hen ilman uudelleenkehitystä |
 
 ---
@@ -69,17 +69,18 @@ Repo on **ensisijainen** tapa toistaa ohjelmisto; levykuva (vaihe 4) on pakkaus/
 
 **Ajoitus:** vasta kun **vaihe 1 YKV-toimintatesti** on hyväksytty (oikea vaaka, ei vain mock).
 
-Silloin viimeistellään mm.:
+Silloin viimeistellään mm. (**UI-lock 2026-09-22**):
 
-- **Dual-scale kiosk:** kaksi vierekkäistä vaakayksikköä; oma live-paino + palaute per vaaka; yhteyskatko per vaaka
-- **Alalaidan laskenta:** nykyisen kaltainen päivätilasto molempien vaakojen tapahtumista (yhteensä ja/tai eriteltynä)
-- **Admin-näkymä:** kehitys ja parannus (raportit, kynnykset, health, dual-scale status); käyttö kytkimen kautta
-- Muut backlog-ideat voivat tulla myöhemmin; yllä kolme ovat **varmat** kehityspolut
+- **Dual-scale kiosk (peilattu A\|B):** kaksi vaakaa + kaksi YKV:tä; A vasen / B oikea; oma live-paino (*Ruokahävikkisi tänään*) + itsenäinen palaute per vaaka; ei vaakanimiä näytöllä; FullHD 27″ display-only (ei kosketusta)
+- **Kolmiportainen palaute:** hyvä / ok / paljon (smile \| ok \| frown); kannustavat koulusävytteiset tekstit configista
+- **Alalaidan laskenta:** **yhteistilastot** molemmilta (ei vaakakohtaista erittelyä); neljä hieman pienempää korttia, luku + label **peräkkäin** (fonttikoot ennallaan): `kpl` · `kg` · `keskimäärin g / palautus` · `Päivän pienin g` (korvaa max g; ei “tänään”-sanaa labeleissa); tyhjä päivä → `—`
+- **Kiosk display-only:** ei Taara/Nollaa eikä tekniikkastatusta (MOCK/YKV/yhteys); mock-demonapit vain esittelytilassa
+- **Admin-näkymä:** raportit, kynnykset (3-portaiset), health **per scale A/B**, Taara / päivän nollaus / esittelymock; käyttö kytkimen kautta
 
 Backlogit: `docs/admin-backlog-agentti2.md`, `docs/kiosk-kilpailija-esitys.md`.  
 Monistus ilman UI-muutoksia: [`.cursor/skills/havikkivaaka-kiosk-deploy`](../.cursor/skills/havikkivaaka-kiosk-deploy/SKILL.md).
 
-Älä lukitse tuotanto-ISO:a ennen dual/admin-hyväksyntää — UI muuttuu vielä.
+Älä lukitse tuotanto-ISO:a ennen dual/admin-toteutuksen hyväksyntää — UI-koodi vielä lab-yksivaakaa.
 
 ---
 

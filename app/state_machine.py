@@ -21,7 +21,7 @@ class LiveState:
     phase: Phase = Phase.IDLE
     weight_g: float = 0.0
     stable: bool = True
-    feedback: str | None = None  # smile | frown
+    feedback: str | None = None  # smile | ok | frown
     settle_started: float | None = None
     feedback_until: float | None = None
     last_event_g: float | None = None  # addition size of last event
@@ -34,10 +34,12 @@ class LiveState:
     day_total_g: float = 0.0
     day_avg_g: float = 0.0
     day_max_g: float = 0.0
+    day_min_g: float | None = None
 
 
 @dataclass
 class StateMachine:
+    threshold_ok_g: float = 200.0
     threshold_g: float = 300.0
     settle_s: float = 10.0
     empty_g: float = 20.0
@@ -52,15 +54,27 @@ class StateMachine:
     # treat as empty bin returned and auto-tare.
     empty_bin_g: float = 0.0
     empty_bin_tolerance_g: float = 50.0
+    # Kitchen / production scale: record grams, no smile/ok/frown UI.
+    data_only: bool = False
     on_event: Callable[[float, str], None] | None = None
     on_auto_tare: Callable[[], None] | None = None
     state: LiveState = field(default_factory=LiveState)
     _held_g: float | None = field(default=None, repr=False)
     _held_since: float | None = field(default=None, repr=False)
 
+    def classify_feedback(self, addition_g: float) -> str:
+        """3-tier: smile | ok | frown."""
+        ok_g = min(self.threshold_ok_g, self.threshold_g)
+        if addition_g < ok_g:
+            return "smile"
+        if addition_g < self.threshold_g:
+            return "ok"
+        return "frown"
+
     def apply_runtime_config(
         self,
         *,
+        threshold_ok_g: float | None = None,
         threshold_g: float | None = None,
         settle_s: float | None = None,
         empty_g: float | None = None,
@@ -70,8 +84,11 @@ class StateMachine:
         quantize_g: float | None = None,
         empty_bin_g: float | None = None,
         empty_bin_tolerance_g: float | None = None,
+        data_only: bool | None = None,
     ) -> None:
         """Hot-apply admin settings without process restart."""
+        if threshold_ok_g is not None:
+            self.threshold_ok_g = float(threshold_ok_g)
         if threshold_g is not None:
             self.threshold_g = float(threshold_g)
         if settle_s is not None:
@@ -92,6 +109,8 @@ class StateMachine:
             self.empty_bin_g = float(empty_bin_g)
         if empty_bin_tolerance_g is not None:
             self.empty_bin_tolerance_g = float(empty_bin_tolerance_g)
+        if data_only is not None:
+            self.data_only = bool(data_only)
 
     def _step_g(self, raw_g: float) -> float:
         qg = self.quantize_g
@@ -243,14 +262,21 @@ class StateMachine:
                 and (now - s.settle_started) >= self.settle_s
             ):
                 # Classify by this cycle's addition, not total bin weight
-                fb = "smile" if addition < self.threshold_g else "frown"
-                s.feedback = fb
+                fb = "none" if self.data_only else self.classify_feedback(addition)
                 s.last_event_g = addition
                 s.baseline_g = weight_g
-                s.phase = Phase.FEEDBACK
-                s.feedback_until = now + self.feedback_show_s
                 if self.on_event:
                     self.on_event(addition, fb)
+                if self.data_only:
+                    # Kitchen scale: no diner feedback window
+                    s.feedback = None
+                    s.feedback_until = None
+                    s.phase = Phase.HOLD
+                    s.settle_started = None
+                else:
+                    s.feedback = fb
+                    s.phase = Phase.FEEDBACK
+                    s.feedback_until = now + self.feedback_show_s
             return s
 
         # IDLE or HOLD — near-empty absolute may mean bin lifted (tyhjennys)
@@ -299,6 +325,7 @@ class StateMachine:
             "baseline_g": self._round_display(s.baseline_g),
             "connected": s.connected,
             "error": s.error,
+            "threshold_ok_g": self.threshold_ok_g,
             "threshold_g": self.threshold_g,
             "settle_s": self.settle_s,
             "feedback_show_s": self.feedback_show_s,
@@ -312,5 +339,10 @@ class StateMachine:
                 "total_g": self._round_display(s.day_total_g),
                 "avg_g": self._round_display(s.day_avg_g),
                 "max_g": self._round_display(s.day_max_g),
+                "min_g": (
+                    self._round_display(s.day_min_g)
+                    if s.day_min_g is not None
+                    else None
+                ),
             },
         }

@@ -45,7 +45,7 @@ Fully offline: no cloud, no internet. One edge host runs the API + guest kiosk d
 | Host | Lenovo E31-80, **Xubuntu / Ubuntu 26.04** | `~/havikkivaaka`, edge IP `192.168.50.10` — **YKV + softan testi, ei tuotanto** |
 | Dev / admin link | Mac `192.168.50.1` ↔ Lenovo `192.168.50.10` | USB-Ethernet or switch; admin `http://192.168.50.10:8080/admin` |
 | Dealer link | Lenovo `192.168.50.10` ↔ YKV `192.168.50.11` | CAT6 + `enable-ykv-link.sh` DHCP |
-| Scale | 1× YKV-02 + platform | TCP **23** KCP; weight via **SAD** + `data/ykv_sad_cal.json`. Commission: [`.cursor/skills/ykv-commissioning`](.cursor/skills/ykv-commissioning/SKILL.md). Deploy any host: [`.cursor/skills/havikkivaaka-kiosk-deploy`](.cursor/skills/havikkivaaka-kiosk-deploy/SKILL.md) |
+| Scale | **0–3×** YKV-02 (max 3; skeema laajennettavissa) | TCP **23** KCP. Sallitut: **A** \| **A+B** \| **A+C** \| **A+B+C** \| **C**. Hostit Admin UI:sta (`scale_*_host` / port). **A** = vasen lohko (yksin tai A+C → kiosk full-width); **B** = oikea lohko; **C** = keittiön hävikki (data only, ei palautetta, tilastot erillään; vain C → **ei kiosk-tilaa**). SAD cal per enabled scale. |
 
 Lab without switch: one Ethernet cable at a time (Mac↔Lenovo **or** Lenovo↔YKV **or** Mac↔YKV diagnostic). With switch: Mac + YKV + edge can share the LAN.
 
@@ -56,8 +56,8 @@ Lab without switch: one Ethernet cable at a time (Mac↔Lenovo **or** Lenovo↔Y
 ## Software
 - `app/server.py` — poll `SI`, state machine, SQLite, HTTP kiosk + admin API
 - `app/config.py` — `data/config.json` (thresholds, theme, export flags, smile/frown texts); hot-reload on save
-- `app/static/index.html` — smile/frown (texts from `/api/state` config), live addition g, day stats, Taara / Nollaa; `data-theme` from config
-- `app/static/admin.html` — Finnish admin: settings (incl. feedback texts), day events, CSV/JSON export, device health
+- `app/static/index.html` — diner kiosk vain kun A tai A+B (A = full-width; A+B = split); C ei diner-UI; 3-tier feedback A/B; day stats min_g (A+B); mock demo; `data-theme`
+- `app/static/admin.html` — settings, reports, health; backlog: layouts A/A+B/A+B+C/C, hostit UI:sta, C erilliset tilastot, (i)-hover ohjeet
 - `data/exports/` — auto/manual day reports (`day-YYYY-MM-DD-*.csv|.json`)
 - `scripts/start-kiosk.sh` — `--mock` / `--live` / `--live --browser-only` (Chromium when systemd owns the app)
 - `scripts/havikki-boot-ykv.sh` + `havikki-ykv-link.service` — EEE off + `enable-ykv-link.sh` (dnsmasq → `.11`)

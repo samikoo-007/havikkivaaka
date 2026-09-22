@@ -12,10 +12,15 @@
       --ok: #6fbf73;
       --bad: #e07070;
       --panel: #242b27;
+      --panel-deep: #1e2521;
       --accent: #c4a35a;
       --header-border: #333;
       --btn: #3a4540;
       --btn-demo: #2f3d55;
+      --smile: #1b7a3a;
+      --frown: #b3261e;
+      --settle: #e6c200;
+      --ok-fb: #8a7020;
     }
     [data-theme="light"] {
       --bg: #eef2ee;
@@ -24,10 +29,15 @@
       --ok: #1b7a3a;
       --bad: #b3261e;
       --panel: #ffffff;
+      --panel-deep: #f4f6f4;
       --accent: #c4a35a;
       --header-border: #cfd6cf;
       --btn: #d5ddd6;
       --btn-demo: #c5d0e0;
+      --smile: #1b7a3a;
+      --frown: #b3261e;
+      --settle: #e6c200;
+      --ok-fb: #c4a035;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -35,108 +45,179 @@
       background: var(--bg); color: var(--fg);
       font-family: "Segoe UI", "Ubuntu", system-ui, sans-serif;
       user-select: none;
+      overflow: hidden;
     }
     .wrap {
-      min-height: 100%;
+      height: 100%;
+      max-height: 100dvh;
       display: grid;
-      grid-template-rows: auto 1fr auto;
-      gap: 1rem;
-      padding: 1.25rem 1.5rem 1.5rem;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: clamp(0.5rem, 1.2vh, 1rem);
+      padding: clamp(0.6rem, 1.5vh, 1.25rem) clamp(0.75rem, 1.5vw, 1.5rem);
     }
     header {
-      display: flex; justify-content: space-between; align-items: baseline;
-      border-bottom: 1px solid var(--header-border); padding-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 1rem;
+      padding-bottom: clamp(0.2rem, 0.5vh, 0.45rem);
+      flex-shrink: 0;
     }
-    header h1 { margin: 0; font-size: 1.4rem; letter-spacing: 0.04em; font-weight: 600; }
-    .meta { color: var(--muted); font-size: 0.95rem; }
+    header h1 {
+      margin: 0;
+      font-size: clamp(1.1rem, 2.2vw, 1.5rem);
+      letter-spacing: 0.04em;
+      font-weight: 600;
+      line-height: 1.2;
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 0.12rem;
+      display: inline-block;
+    }
+    header .site-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(0.85rem, 1.6vw, 1.1rem);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-align: right;
+      max-width: 45%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    header .site-label:empty {
+      display: none;
+    }
     .stage {
       display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 1.25rem;
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(0.6rem, 1.5vw, 1.25rem);
+      min-height: 0;
       align-items: stretch;
     }
-    @media (max-width: 900px) {
-      .stage { grid-template-columns: 1fr; }
+    .stage.single {
+      grid-template-columns: 1fr;
     }
-    .card {
+    .stage.single .scale-panel[data-scale="b"] {
+      display: none;
+    }
+    .kiosk-off {
+      display: none;
+      min-height: 0;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
       background: var(--panel);
-      border-radius: 12px;
-      padding: 1.25rem 1.5rem;
-      display: flex; flex-direction: column; justify-content: center;
-      min-height: 280px;
+      border-radius: clamp(10px, 1.2vw, 14px);
+      padding: 2rem;
+      color: var(--muted);
+      font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+    }
+    .wrap.no-kiosk .stage {
+      grid-template-columns: 1fr;
+    }
+    .wrap.no-kiosk .stage .scale-panel { display: none; }
+    .wrap.no-kiosk .footer .stats { display: none; }
+    .wrap.no-kiosk .kiosk-off { display: flex; }
+    .scale-panel {
+      background: var(--panel);
+      border-radius: clamp(10px, 1.2vw, 14px);
+      border: 1px solid transparent;
+      display: grid;
+      grid-template-rows: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      min-height: 0;
+      overflow: hidden;
+      transition: border-color 0.25s ease, background-color 0.25s ease;
+    }
+    .scale-panel.fb-smile { border-color: var(--smile); }
+    .scale-panel.fb-ok { border-color: var(--ok-fb); }
+    .scale-panel.fb-frown { border-color: var(--frown); }
+    .scale-panel.fb-settling { border-color: var(--settle); }
+
+    .fb-zone {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: clamp(0.35rem, 1vh, 0.75rem);
+      padding: clamp(0.6rem, 1.5vh, 1.25rem) clamp(0.75rem, 1.5vw, 1.25rem);
+      min-height: 0;
+      text-align: center;
       transition: background-color 0.25s ease, color 0.25s ease;
+      background: var(--panel);
     }
-    .card.feedback-smile {
-      background: #1b7a3a;
-      color: #ffffff;
+    .scale-panel.fb-smile .fb-zone {
+      background: var(--smile);
+      color: #fff;
     }
-    .card.feedback-frown {
-      background: #b3261e;
-      color: #ffffff;
+    .scale-panel.fb-ok .fb-zone {
+      background: var(--ok-fb);
+      color: #fff;
     }
-    .card.feedback-settling {
-      background: #e6c200;
+    .scale-panel.fb-frown .fb-zone {
+      background: var(--frown);
+      color: #fff;
+    }
+    .scale-panel.fb-settling .fb-zone {
+      background: var(--settle);
       color: #1a1a1a;
     }
     .face {
-      font-size: clamp(6rem, 22vw, 11rem);
-      line-height: 1; text-align: center;
+      font-size: clamp(3.5rem, 12vmin, 8.5rem);
+      line-height: 1;
       transition: transform 0.2s ease, color 0.25s ease;
     }
-    .face.smile,
-    .face.frown { color: #ffffff; }
-    .face.idle { color: var(--muted); font-size: clamp(3rem, 10vw, 5rem); }
-    .card.feedback-settling .face.idle {
-      color: #1a1a1a;
-    }
-    .card.feedback-smile .phase,
-    .card.feedback-frown .phase {
-      color: #f5f5f5;
-      text-transform: none;
-      letter-spacing: 0.02em;
-      font-size: clamp(1rem, 2.4vw, 1.25rem);
-      font-weight: 600;
-      line-height: 1.35;
-      max-width: 22ch;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .card.feedback-settling .phase {
-      color: #1a1a1a;
-      font-weight: 600;
-    }
-    .weight-card {
-      justify-content: flex-start;
-      align-items: center;
-      text-align: center;
-      gap: 0.5rem;
-    }
-    .weight-label {
-      flex-shrink: 0;
-      width: 100%;
-      text-align: center;
-      color: var(--fg);
-      font-size: clamp(1.35rem, 3.2vw, 1.85rem);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      line-height: 1.25;
+    .face.idle { color: var(--muted); font-size: clamp(2.2rem, 7vmin, 4.5rem); }
+    .scale-panel.fb-smile .face,
+    .scale-panel.fb-ok .face,
+    .scale-panel.fb-frown .face { color: #fff; }
+    .scale-panel.fb-settling .face.idle { color: #1a1a1a; }
+    .fb-msg {
       margin: 0;
+      font-size: clamp(0.95rem, 2.1vw, 1.35rem);
+      font-weight: 600;
+      line-height: 1.3;
+      max-width: 22ch;
+      color: inherit;
     }
-    .weight-area {
-      flex: 1;
+    .scale-panel:not(.fb-smile):not(.fb-ok):not(.fb-frown):not(.fb-settling) .fb-msg {
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: clamp(0.75rem, 1.5vw, 0.95rem);
+    }
+
+    .wt-zone {
+      background: var(--panel-deep);
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      width: 100%;
+      gap: clamp(0.25rem, 0.8vh, 0.5rem);
+      padding: clamp(0.5rem, 1.2vh, 1rem) clamp(0.6rem, 1.2vw, 1rem);
       min-height: 0;
+      text-align: center;
+    }
+    .scale-panel.waiting .wt-zone .weight-label,
+    .scale-panel.waiting .wt-zone .weight,
+    .scale-panel.waiting .wt-zone .err {
+      visibility: hidden;
+    }
+    .weight-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(0.85rem, 1.8vw, 1.15rem);
+      font-weight: 600;
+      letter-spacing: 0.02em;
     }
     .weight {
       display: flex;
       align-items: baseline;
       justify-content: center;
-      font-size: clamp(3.8rem, 14vw, 7rem);
+      font-size: clamp(2.6rem, 9vmin, 6.2rem);
       font-variant-numeric: tabular-nums;
-      text-align: center; font-weight: 600;
+      font-weight: 600;
       line-height: 1;
     }
     .weight .unit {
@@ -144,73 +225,138 @@
       color: var(--muted);
       margin-left: 0.15em;
     }
-    .weight-card .err {
-      flex-shrink: 0;
+    .err {
       margin: 0;
-      min-height: 1.2em;
+      color: var(--bad);
+      font-size: clamp(0.75rem, 1.4vw, 0.95rem);
+      min-height: 1.1em;
     }
-    .phase { text-align: center; color: var(--muted); margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; }
+
+    .footer {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      flex-shrink: 0;
+    }
     .stats {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: clamp(0.4rem, 1vw, 0.65rem);
     }
     .stat {
-      background: var(--panel); border-radius: 10px; padding: 0.9rem 1rem; text-align: center;
+      background: var(--panel);
+      border-radius: 8px;
+      padding: clamp(0.4rem, 1vh, 0.65rem) clamp(0.5rem, 1vw, 0.85rem);
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.45em;
+      min-width: 0;
     }
-    .stat .v { font-size: 1.5rem; font-weight: 600; }
-    .stat .l { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
-    .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+    .stat .v {
+      font-size: 1.5rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+      flex-shrink: 0;
+    }
+    .stat .l {
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.2;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .actions {
+      display: none;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .actions.visible { display: flex; }
     button {
-      appearance: none; border: 0; border-radius: 10px;
-      padding: 0.9rem 1.3rem; font-size: 1.05rem; cursor: pointer;
-      background: var(--btn); color: var(--fg); min-width: 7rem;
+      appearance: none; border: 0; border-radius: 8px;
+      padding: 0.55rem 0.95rem; font-size: 0.95rem; cursor: pointer;
+      background: var(--btn); color: var(--fg); min-width: 5.5rem;
     }
     button:hover { filter: brightness(1.08); }
-    button.primary { background: var(--accent); color: #1a1a1a; font-weight: 600; }
     button.demo { background: var(--btn-demo); }
-    .err { color: var(--bad); min-height: 1.2em; }
-    .bin-weight {
-      margin: 0.35rem 0 0;
-      color: var(--muted);
-      font-size: 0.85rem;
-      text-align: center;
+
+    /* Lenovo / smaller landscape: keep dual columns, tighten type */
+    @media (max-height: 800px) {
+      .face { font-size: clamp(2.8rem, 10vmin, 6rem); }
+      .weight { font-size: clamp(2.2rem, 8vmin, 4.8rem); }
+      .stat .v { font-size: 1.35rem; }
+    }
+    @media (max-width: 1100px) {
+      .fb-msg { max-width: 20ch; }
+      .stat .l { font-size: 0.72rem; }
+    }
+    /* Narrow / portrait fallback: stack scales */
+    @media (max-width: 720px), (orientation: portrait) and (max-width: 900px) {
+      html, body { overflow: auto; }
+      .wrap { height: auto; min-height: 100%; max-height: none; overflow: visible; }
+      .stage { grid-template-columns: 1fr; }
+      .scale-panel { min-height: 42vh; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="wrap" id="kioskWrap">
     <header>
-      <h1>Hävikkivaaka</h1>
-      <div class="meta"><span id="mode">—</span> · <span id="conn">—</span></div>
+      <h1 id="kioskTitle">Hävikkivaaka</h1>
+      <p class="site-label" id="kioskLocation"></p>
     </header>
 
-    <div class="stage">
-      <div class="card" id="feedbackCard">
-        <div id="face" class="face idle">•</div>
-        <div class="phase" id="phase">odottaa</div>
+    <div class="stage" id="stage">
+      <div class="kiosk-off" id="kioskOff">
+        Tämä kokoonpano on vain keittiön hävikkimittaus (C).<br />
+        Diner-kiosk ei ole käytössä — avaa <a href="/admin" style="color:var(--accent)">Admin</a>.
       </div>
-      <div class="card weight-card">
-        <p class="weight-label">Ruokahävikkisi tänään</p>
-        <div class="weight-area">
-          <div class="weight"><span id="weight">0.0</span><span class="unit">g</span></div>
+      <article class="scale-panel" id="panel-a" data-scale="a">
+        <div class="fb-zone">
+          <div class="face idle" data-role="face">•</div>
+          <p class="fb-msg" data-role="msg">odottaa</p>
         </div>
-        <p class="bin-weight" id="binWeight"></p>
-        <p class="err" id="err"></p>
-      </div>
+        <div class="wt-zone">
+          <p class="weight-label">Ruokahävikkisi tänään</p>
+          <div class="weight"><span data-role="weight">—</span><span class="unit">g</span></div>
+          <p class="err" data-role="err"></p>
+        </div>
+      </article>
+      <article class="scale-panel" id="panel-b" data-scale="b">
+        <div class="fb-zone">
+          <div class="face idle" data-role="face">•</div>
+          <p class="fb-msg" data-role="msg">odottaa</p>
+        </div>
+        <div class="wt-zone">
+          <p class="weight-label">Ruokahävikkisi tänään</p>
+          <div class="weight"><span data-role="weight">—</span><span class="unit">g</span></div>
+          <p class="err" data-role="err"></p>
+        </div>
+      </article>
     </div>
 
-    <div>
+    <div class="footer">
       <div class="stats">
-        <div class="stat"><div class="v" id="c">0</div><div class="l">kpl tänään</div></div>
-        <div class="stat"><div class="v" id="t">0</div><div class="l">kg tänään</div></div>
-        <div class="stat"><div class="v" id="a">0</div><div class="l">Keskiarvo g / ruokailija</div></div>
-        <div class="stat"><div class="v" id="m">0</div><div class="l">max g</div></div>
+        <div class="stat"><span class="v" id="c">—</span><span class="l">kpl</span></div>
+        <div class="stat"><span class="v" id="t">—</span><span class="l">kg</span></div>
+        <div class="stat"><span class="v" id="a">—</span><span class="l">keskimäärin g / palautus</span></div>
+        <div class="stat"><span class="v" id="m">—</span><span class="l">Päivän pienin g</span></div>
       </div>
-      <div class="actions">
-        <button class="primary" id="btnTare">Taara</button>
-        <button id="btnZero">Nollaa</button>
-        <button class="demo" id="btnSmile" title="mock">+150 g</button>
-        <button class="demo" id="btnFrown" title="mock">+400 g</button>
-        <button class="demo" id="btnEmpty" title="mock">Tyhjennä</button>
+      <div class="actions" id="demoActions">
+        <button class="demo" data-demo-scale="a" data-grams="150">A +150</button>
+        <button class="demo" data-demo-scale="a" data-grams="280">A +280</button>
+        <button class="demo" data-demo-scale="a" data-grams="400">A +400</button>
+        <button class="demo" data-demo-scale="b" data-grams="150">B +150</button>
+        <button class="demo" data-demo-scale="b" data-grams="280">B +280</button>
+        <button class="demo" data-demo-scale="b" data-grams="400">B +400</button>
+        <button class="demo" id="btnEmptyA">A tyhjennä</button>
+        <button class="demo" id="btnEmptyB">B tyhjennä</button>
       </div>
     </div>
   </div>
@@ -223,10 +369,12 @@
       away: "tyhjennys — odota astiaa",
     };
     const feedbackMsgDefaults = {
-      smile: "Kiitos, olet ihana!",
-      frown: "Ota seuraavalla kerralla vähemmän, voit aina ottaa lisää jos ruoka on hyvää!",
+      smile: "Hienoa — pieni hävikki tänään.",
+      ok: "Ihan ok — seuraavalla kerralla voit ottaa vähän vähemmän.",
+      frown: "Kiitos palautuksesta — pienempi annos säästää ja maistuu usein paremmin.",
     };
     let feedbackMsg = { ...feedbackMsgDefaults };
+
     async function api(path, body) {
       const opts = body === undefined ? {} : {
         method: "POST",
@@ -236,6 +384,7 @@
       const r = await fetch(path, opts);
       return r.json();
     }
+
     function friendlyError(raw) {
       if (!raw) return "";
       const t = String(raw);
@@ -246,89 +395,188 @@
       if (/Errno|OSError|Connection|socket/i.test(t)) return "Odottaa vaakaa";
       return t;
     }
+
     function applyTheme(theme) {
-      const t = theme === "light" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", t);
+      document.documentElement.setAttribute(
+        "data-theme",
+        theme === "light" ? "light" : "dark"
+      );
     }
-    function render(s) {
-      if (s.theme || (s.config && s.config.theme)) {
-        applyTheme(s.theme || s.config.theme);
+
+    function dashIfEmpty(count, value, formatFn) {
+      if (!count) return "—";
+      return formatFn(value);
+    }
+
+    function scaleFromState(s, id) {
+      if (s.scales && s.scales[id]) return s.scales[id];
+      if (id === "a") {
+        return {
+          phase: s.phase,
+          connected: s.connected,
+          feedback: s.feedback,
+          live_addition_g: s.live_addition_g ?? s.weight_g,
+          error: s.error,
+          quantize_g: s.quantize_g,
+        };
       }
-      const cfg = s.config || {};
-      feedbackMsg = {
-        smile: (cfg.feedback_smile_text || "").trim() || feedbackMsgDefaults.smile,
-        frown: (cfg.feedback_frown_text || "").trim() || feedbackMsgDefaults.frown,
+      return {
+        phase: "idle",
+        connected: false,
+        feedback: null,
+        live_addition_g: null,
+        error: null,
+        quantize_g: 2,
       };
-      document.getElementById("mode").textContent = s.mode === "mock" ? "MOCK" : "YKV";
-      document.getElementById("conn").textContent = s.connected ? "kytketty" : "ei yhteyttä";
-      const live = s.live_addition_g ?? s.weight_g ?? 0;
-      const qg = Number(s.quantize_g ?? (s.config && s.config.quantize_g) ?? 2);
+    }
+
+    function renderScale(panel, sc, mode) {
+      const face = panel.querySelector('[data-role="face"]');
+      const msg = panel.querySelector('[data-role="msg"]');
+      const weight = panel.querySelector('[data-role="weight"]');
+      const err = panel.querySelector('[data-role="err"]');
+      const qg = Number(sc.quantize_g ?? 2);
       const dec = qg >= 1 ? 0 : 1;
-      document.getElementById("weight").textContent = Number(live).toFixed(dec);
-      const binEl = document.getElementById("binWeight");
-      if (binEl) {
-        const bin = s.bin_weight_g;
-        binEl.textContent =
-          bin == null ? "" : `vaaka ${Number(bin).toFixed(dec)} g`;
-      }
-      const phaseEl = document.getElementById("phase");
-      const card = document.getElementById("feedbackCard");
-      const face = document.getElementById("face");
-      card.classList.remove("feedback-smile", "feedback-frown", "feedback-settling");
-      if (!s.connected && s.mode !== "mock") {
-        phaseEl.textContent = "odottaa vaakaa";
+
+      panel.classList.remove("fb-smile", "fb-ok", "fb-frown", "fb-settling", "waiting");
+
+      if (!sc.connected && mode !== "mock") {
+        panel.classList.add("waiting");
+        msg.textContent = "odottaa vaakaa";
         face.textContent = "•";
         face.className = "face idle";
-      } else if (s.feedback === "smile") {
-        card.classList.add("feedback-smile");
-        phaseEl.textContent = feedbackMsg.smile;
+        weight.textContent = "";
+        err.textContent = "";
+        return;
+      }
+
+      const live = sc.live_addition_g ?? sc.weight_g;
+      weight.textContent =
+        live == null || Number.isNaN(Number(live))
+          ? "—"
+          : Number(live).toFixed(dec);
+
+      if (sc.feedback === "smile") {
+        panel.classList.add("fb-smile");
+        msg.textContent = feedbackMsg.smile;
         face.textContent = "☺";
         face.className = "face smile";
-      } else if (s.feedback === "frown") {
-        card.classList.add("feedback-frown");
-        phaseEl.textContent = feedbackMsg.frown;
+      } else if (sc.feedback === "ok") {
+        panel.classList.add("fb-ok");
+        msg.textContent = feedbackMsg.ok;
+        face.textContent = "😐";
+        face.className = "face ok";
+      } else if (sc.feedback === "frown") {
+        panel.classList.add("fb-frown");
+        msg.textContent = feedbackMsg.frown;
         face.textContent = "☹";
         face.className = "face frown";
       } else {
-        phaseEl.textContent = phaseFi[s.phase] || s.phase;
-        if (s.phase === "settling") {
-          card.classList.add("feedback-settling");
+        msg.textContent = phaseFi[sc.phase] || sc.phase || "odottaa";
+        if (sc.phase === "settling") {
+          panel.classList.add("fb-settling");
           face.textContent = "…";
-        } else if (s.phase === "away") {
+        } else if (sc.phase === "away") {
           face.textContent = "↺";
         } else {
           face.textContent = "•";
         }
         face.className = "face idle";
       }
-      document.getElementById("err").textContent = friendlyError(s.error);
-      document.getElementById("c").textContent = s.day.count;
-      document.getElementById("t").textContent = (s.day.total_g / 1000).toFixed(2);
-      document.getElementById("a").textContent = Math.round(s.day.avg_g);
-      document.getElementById("m").textContent = Math.round(s.day.max_g);
-      const demo = s.mode === "mock";
-      ["btnSmile", "btnFrown", "btnEmpty"].forEach(id => {
-        document.getElementById(id).style.display = demo ? "" : "none";
+      err.textContent = friendlyError(sc.error);
+    }
+
+    function render(s) {
+      if (s.theme || (s.config && s.config.theme)) {
+        applyTheme(s.theme || s.config.theme);
+      }
+      const cfg = s.config || {};
+      const title = ((cfg.kiosk_title || s.kiosk_title || "").trim()) || "Hävikkivaaka";
+      const titleEl = document.getElementById("kioskTitle");
+      if (titleEl && titleEl.textContent !== title) titleEl.textContent = title;
+      if (document.title !== title) document.title = title;
+
+      const location = (
+        cfg.kiosk_location ?? s.kiosk_location ?? cfg.site_label ?? s.site_label ?? ""
+      ).toString().trim();
+      const locEl = document.getElementById("kioskLocation");
+      if (locEl) locEl.textContent = location;
+
+      feedbackMsg = {
+        smile: (cfg.feedback_smile_text || "").trim() || feedbackMsgDefaults.smile,
+        ok: (cfg.feedback_ok_text || "").trim() || feedbackMsgDefaults.ok,
+        frown: (cfg.feedback_frown_text || "").trim() || feedbackMsgDefaults.frown,
+      };
+
+      const wrap = document.getElementById("kioskWrap");
+      const stage = document.getElementById("stage");
+      const kioskOn = s.kiosk_enabled !== false && (cfg.kiosk_enabled !== false);
+      wrap.classList.toggle("no-kiosk", !kioskOn);
+      const split = !!(s.diner_split || cfg.diner_split);
+      stage.classList.toggle("single", !split);
+
+      const mode = s.mode === "mock" ? "mock" : "live";
+      if (kioskOn) {
+        renderScale(document.getElementById("panel-a"), scaleFromState(s, "a"), mode);
+        if (split) {
+          renderScale(document.getElementById("panel-b"), scaleFromState(s, "b"), mode);
+        }
+      }
+
+      const day = s.day || {};
+      const count = Number(day.count || 0);
+      document.getElementById("c").textContent = dashIfEmpty(count, count, (v) => String(v));
+      document.getElementById("t").textContent = dashIfEmpty(
+        count,
+        day.total_g,
+        (v) => (Number(v) / 1000).toFixed(2)
+      );
+      document.getElementById("a").textContent = dashIfEmpty(
+        count,
+        day.avg_g,
+        (v) => String(Math.round(Number(v)))
+      );
+      const minG = day.min_g;
+      document.getElementById("m").textContent =
+        count && minG != null ? String(Math.round(Number(minG))) : "—";
+
+      const demo = document.getElementById("demoActions");
+      demo.classList.toggle("visible", mode === "mock" && kioskOn);
+      demo.querySelectorAll('[data-demo-scale="b"], #btnEmptyB').forEach((el) => {
+        el.style.display = split ? "" : "none";
       });
     }
+
     async function tick() {
       try {
         const s = await api("/api/state");
         render(s);
       } catch (e) {
-        document.getElementById("err").textContent = "Odottaa vaakaa";
-        document.getElementById("conn").textContent = "ei yhteyttä";
-        document.getElementById("phase").textContent = "odottaa vaakaa";
+        renderScale(
+          document.getElementById("panel-a"),
+          { connected: false, error: "Odottaa vaakaa", phase: "idle" },
+          "live"
+        );
+        renderScale(
+          document.getElementById("panel-b"),
+          { connected: false, error: "", phase: "idle" },
+          "live"
+        );
       }
     }
-    document.getElementById("btnTare").onclick = () => api("/api/tare", {});
-    document.getElementById("btnZero").onclick = async () => {
-      await api("/api/reset-day", {});
-      tick();
-    };
-    document.getElementById("btnSmile").onclick = () => api("/api/demo/add", { grams: 150 });
-    document.getElementById("btnFrown").onclick = () => api("/api/demo/add", { grams: 400 });
-    document.getElementById("btnEmpty").onclick = () => api("/api/demo/set", { grams: 0 });
+
+    document.querySelectorAll("[data-demo-scale][data-grams]").forEach((btn) => {
+      btn.onclick = () =>
+        api("/api/demo/add", {
+          grams: Number(btn.dataset.grams),
+          scale: btn.dataset.demoScale,
+        });
+    });
+    document.getElementById("btnEmptyA").onclick = () =>
+      api("/api/demo/set", { grams: 0, scale: "a" });
+    document.getElementById("btnEmptyB").onclick = () =>
+      api("/api/demo/set", { grams: 0, scale: "b" });
+
     setInterval(tick, 400);
     tick();
   </script>

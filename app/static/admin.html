@@ -34,6 +34,7 @@
     }
     h1 { margin: 0; font-size: 1.35rem; font-weight: 650; }
     h2 { margin: 0 0 0.75rem; font-size: 1.05rem; font-weight: 650; }
+    h3 { margin: 1rem 0 0.5rem; font-size: 0.95rem; font-weight: 650; color: var(--muted); }
     a { color: var(--accent); }
     .meta { color: var(--muted); font-size: 0.9rem; }
     section {
@@ -53,6 +54,28 @@
       font-size: 0.85rem; color: var(--muted);
     }
     label.full { grid-column: 1 / -1; }
+    .lab-row {
+      display: flex; align-items: center; gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    .info {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 1.05rem; height: 1.05rem; border-radius: 50%;
+      font-size: 0.7rem; font-weight: 700; font-style: normal;
+      color: var(--accent); border: 1px solid var(--accent);
+      cursor: help; flex-shrink: 0;
+      position: relative;
+    }
+    .info:hover::after, .info:focus::after {
+      content: attr(data-tip);
+      position: absolute; left: 0; top: calc(100% + 0.35rem);
+      z-index: 20; width: min(18rem, 70vw);
+      padding: 0.55rem 0.65rem; border-radius: 6px;
+      background: #1a1f1c; color: #f2f5f0;
+      font-size: 0.78rem; font-weight: 400; line-height: 1.35;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+      white-space: normal; pointer-events: none;
+    }
     input[type="number"], input[type="text"], select, textarea {
       font: inherit; color: var(--fg);
       padding: 0.45rem 0.55rem;
@@ -100,6 +123,7 @@
     }
     th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
     .row-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
+    .host-row.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -117,16 +141,19 @@
     <section>
       <h2>Päivän yhteenveto</h2>
       <div class="row-tools">
-        <label>Päivä
+        <label><span class="lab-row">Päivä <i class="info" tabindex="0" data-tip="Näyttää valitun päivän tapahtumat ja yhteenvedot.">i</i></span>
           <input type="text" id="dayFilter" placeholder="YYYY-MM-DD" />
         </label>
         <button type="button" id="btnReloadDay">Päivitä</button>
       </div>
-      <div class="status" id="dayStats" style="margin-top:0.75rem"></div>
+      <h3>Lautashävikki (A/B)</h3>
+      <div class="status" id="dayStatsPlate"></div>
+      <h3>Keittiön hävikki (C)</h3>
+      <div class="status" id="dayStatsKitchen"></div>
       <div style="overflow-x:auto">
         <table>
           <thead>
-            <tr><th>Aika</th><th>g</th><th>Palaute</th></tr>
+            <tr><th>Aika</th><th>Vaaka</th><th>g</th><th>Palaute</th></tr>
           </thead>
           <tbody id="eventsBody"></tbody>
         </table>
@@ -136,68 +163,110 @@
     <section>
       <h2>Asetukset</h2>
       <form id="cfgForm">
+        <h3>Vaakakokoonpano</h3>
         <div class="grid">
-          <label>Hymy/suru-kynnys (g)
+          <label class="full"><span class="lab-row">Kokoonpano <i class="info" tabindex="0" data-tip="Valitse käytössä olevat vaa’at. A = vasen lohko (kiosk), B = oikea lohko, C = keittiön hävikki (vain mittaus, ei kiosk-palautetta). Vain C: ei diner-kioskia. A+C: kiosk näyttää A:n koko leveydeltä.">i</i></span>
+            <select name="scale_layout" id="scaleLayout">
+              <option value="a">A — Vasen lohko (kiosk koko leveys)</option>
+              <option value="a_b">A+B — Vasen + oikea lohko</option>
+              <option value="a_c">A+C — Vasen lohko + keittiön hävikki</option>
+              <option value="a_b_c">A+B+C — Molemmat lohkot + keittiö</option>
+              <option value="c">C — Vain keittiön hävikki (ei kioskia)</option>
+            </select>
+          </label>
+          <label class="host-row" data-slot="a"><span class="lab-row">Vasen lohko — IP <i class="info" tabindex="0" data-tip="YKV-lähettimen IP-osoite vaaka A:lle (vasen lohko). Muutos yhdistää uudelleen tallennuksen jälkeen.">i</i></span>
+            <input type="text" name="scale_a_host" maxlength="128" placeholder="192.168.50.11" />
+          </label>
+          <label class="host-row" data-slot="a"><span class="lab-row">Vasen lohko — portti <i class="info" tabindex="0" data-tip="KCP-portti (yleensä 23).">i</i></span>
+            <input type="number" name="scale_a_port" min="1" max="65535" step="1" />
+          </label>
+          <label class="host-row" data-slot="b"><span class="lab-row">Oikea lohko — IP <i class="info" tabindex="0" data-tip="YKV-lähettimen IP vaaka B:lle (oikea lohko).">i</i></span>
+            <input type="text" name="scale_b_host" maxlength="128" placeholder="192.168.50.12" />
+          </label>
+          <label class="host-row" data-slot="b"><span class="lab-row">Oikea lohko — portti <i class="info" tabindex="0" data-tip="KCP-portti vaaka B:lle (yleensä 23).">i</i></span>
+            <input type="number" name="scale_b_port" min="1" max="65535" step="1" />
+          </label>
+          <label class="host-row" data-slot="c"><span class="lab-row">Keittiön hävikki — IP <i class="info" tabindex="0" data-tip="YKV-lähettimen IP vaaka C:lle. Kerää päiväkohtaista tuotantohävikkiä ilman ruokailijapalautetta.">i</i></span>
+            <input type="text" name="scale_c_host" maxlength="128" placeholder="192.168.50.13" />
+          </label>
+          <label class="host-row" data-slot="c"><span class="lab-row">Keittiön hävikki — portti <i class="info" tabindex="0" data-tip="KCP-portti vaaka C:lle (yleensä 23).">i</i></span>
+            <input type="number" name="scale_c_port" min="1" max="65535" step="1" />
+          </label>
+        </div>
+
+        <h3>Kynnykset ja mittaus</h3>
+        <div class="grid">
+          <label><span class="lab-row">Hyvä-kynnys (g) <i class="info" tabindex="0" data-tip="Alle tämän gramman lisäys → hymypalaute. Ei koske keittiövaakaa C.">i</i></span>
+            <input type="number" name="threshold_ok_g" step="1" min="50" max="5000" required />
+          </label>
+          <label><span class="lab-row">Paljon-kynnys (g) <i class="info" tabindex="0" data-tip="Tämän verran tai enemmän → surupalaute. Väli hyvä–paljon = ok-palaute.">i</i></span>
             <input type="number" name="threshold_g" step="1" min="50" max="5000" required />
           </label>
-          <label>Settle-aika (s)
+          <label><span class="lab-row">Settle-aika (s) <i class="info" tabindex="0" data-tip="Kuinka kauan painon pitää olla vakaa ennen kuin tapahtuma kirjataan.">i</i></span>
             <input type="number" name="settle_s" step="0.1" min="0.5" max="120" required />
           </label>
-          <label>Palautteen näyttö (s)
+          <label><span class="lab-row">Palautteen näyttö (s) <i class="info" tabindex="0" data-tip="Kuinka kauan hymy/ok/suru näkyy kioskissa. Ei vaikuta C:hen.">i</i></span>
             <input type="number" name="feedback_show_s" step="0.1" min="0.5" max="30" required />
           </label>
-          <label>Tyhjän lukeman kynnys empty_g (g)
+          <label><span class="lab-row">Tyhjän lukeman kynnys (g) <i class="info" tabindex="0" data-tip="Netto ≤ tämä → astia tulkitaan pois vaa’alta (tyhjennys alkaa).">i</i></span>
             <input type="number" name="empty_g" step="1" min="0" max="500" required />
           </label>
-          <label>Tyhjennysviive empty_away_s (s)
+          <label><span class="lab-row">Tyhjennysviive (s) <i class="info" tabindex="0" data-tip="Kuinka kauan tyhjän lukeman pitää kestää ennen tyhjennystilaa.">i</i></span>
             <input type="number" name="empty_away_s" step="0.5" min="1" max="300" required />
           </label>
-          <label>Aloitusdelta start_delta_g (g)
+          <label><span class="lab-row">Aloitusdelta (g) <i class="info" tabindex="0" data-tip="Pienin lisäys baselineen nähden, joka aloittaa uuden mittauksen.">i</i></span>
             <input type="number" name="start_delta_g" step="1" min="5" max="500" required />
           </label>
-          <label>Huojuntaraja quantize_g (g)
+          <label><span class="lab-row">Huojuntaraja (g) <i class="info" tabindex="0" data-tip="Painon pyöristys/deadband. Vähentää SAD-kohinan aiheuttamia vääriä tapahtumia.">i</i></span>
             <input type="number" name="quantize_g" step="1" min="0" max="50" required />
           </label>
-          <label>Tyhjän astian paino (g)
+          <label><span class="lab-row">Tyhjän astian paino (g) <i class="info" tabindex="0" data-tip="Tunnettu tyhjän astian massa. Kun lukema ≈ tämä ± toleranssi tyhjennyksen jälkeen → auto-taara. 0 = pois.">i</i></span>
             <input type="number" name="empty_bin_g" step="1" min="0" max="50000" />
           </label>
-          <label>Astian toleranssi (g)
+          <label><span class="lab-row">Astian toleranssi (g) <i class="info" tabindex="0" data-tip="Sallittu poikkeama tyhjän astian painosta auto-taarassa.">i</i></span>
             <input type="number" name="empty_bin_tolerance_g" step="1" min="1" max="2000" />
           </label>
-          <label>Esitäytön baseline prefill_waste_g (g)
+          <label><span class="lab-row">Esitäytön baseline (g) <i class="info" tabindex="0" data-tip="Jos astiassa on jo jätettä käynnistyessä, tämä massa ei kirjaudu uutena tapahtumana.">i</i></span>
             <input type="number" name="prefill_waste_g" step="1" min="0" max="50000" />
           </label>
-          <label>CO₂-kerroin (kg CO₂ / kg hävikki)
+          <label><span class="lab-row">CO₂-kerroin <i class="info" tabindex="0" data-tip="kg CO₂ / kg hävikki. Käytetään JSON-viennin co2_kg-kentässä.">i</i></span>
             <input type="number" name="co2_factor_kg_per_kg" step="0.1" min="0" max="50" />
           </label>
-          <label>Piste-tunnus site_id
+          <label><span class="lab-row">Kioskin otsikko <i class="info" tabindex="0" data-tip="Näkyy diner-kioskin vasemmassa ylälaidassa (esim. Hävikkivaaka). Tallenna asetukset, niin kiosk päivittyy heti.">i</i></span>
+            <input type="text" name="kiosk_title" maxlength="80" placeholder="Hävikkivaaka" />
+          </label>
+          <label><span class="lab-row">Kioskin sijainti <i class="info" tabindex="0" data-tip="Näkyy diner-kioskin oikeassa yläkulmassa (esim. koulun nimi). Tyhjä = ei näytetä.">i</i></span>
+            <input type="text" name="kiosk_location" maxlength="80" placeholder="(tyhjä = piilossa)" />
+          </label>
+          <label><span class="lab-row">Piste-tunnus <i class="info" tabindex="0" data-tip="Toimipisteen tunniste raporteissa (esim. lab-1). Ei näy ruokailijalle.">i</i></span>
             <input type="text" name="site_id" maxlength="64" />
           </label>
-          <label>Kioskin teema
+          <label><span class="lab-row">Kioskin teema <i class="info" tabindex="0" data-tip="Tumma tai vaalea tausta diner-kioskissa.">i</i></span>
             <select name="theme">
               <option value="dark">Tumma</option>
               <option value="light">Vaalea</option>
             </select>
           </label>
-          <label class="full">Hymy-palaute (teksti)
+          <label class="full"><span class="lab-row">Hyvä-palaute <i class="info" tabindex="0" data-tip="Teksti kioskissa hymypalautteen yhteydessä.">i</i></span>
             <textarea name="feedback_smile_text" maxlength="500" rows="2" required></textarea>
           </label>
-          <label class="full">Suru-palaute (teksti)
+          <label class="full"><span class="lab-row">Ok-palaute <i class="info" tabindex="0" data-tip="Teksti kioskissa ok-palautteen yhteydessä.">i</i></span>
+            <textarea name="feedback_ok_text" maxlength="500" rows="2" required></textarea>
+          </label>
+          <label class="full"><span class="lab-row">Paljon-palaute <i class="info" tabindex="0" data-tip="Teksti kioskissa surupalautteen yhteydessä.">i</i></span>
             <textarea name="feedback_frown_text" maxlength="1000" rows="3" required></textarea>
           </label>
           <label class="check full">
             <input type="checkbox" name="export_before_reset" />
-            Vie raportti ennen päivän nollausta
+            <span class="lab-row">Vie raportti ennen päivän nollausta <i class="info" tabindex="0" data-tip="Kun päällä, Nollaa päivä kirjoittaa ensin CSV+JSON kansioon data/exports/.">i</i></span>
           </label>
         </div>
         <p class="hint">
-          Taara / auto-taara ei nollaa päivän kg. Tyhjän astian paino: kun astia palaa tyhjennyksen jälkeen
-          ja lukema ≈ tämä ± toleranssi → auto-taara. Esitäyttö / „Aseta baseline”: astia jossa jo jätettä
-          ei laske olemassa olevaa jätettä uutena tapahtumana.
+          Taara / auto-taara ei nollaa päivän kg. Lautas- ja keittiöhävikki lasketaan aina erillään.
         </p>
         <div class="actions">
           <button type="submit" class="primary">Tallenna asetukset</button>
-          <button type="button" id="btnBaseline">Aseta baseline nykyisestä painosta</button>
+          <button type="button" id="btnBaseline">Aseta baseline (A)</button>
         </div>
         <p class="msg" id="cfgMsg"></p>
       </form>
@@ -205,7 +274,7 @@
 
     <section>
       <h2>Raportit</h2>
-      <p class="hint">Suositus: CSV Exceliin, JSON API-/arkistokäyttöön. Tiedostot myös <code>data/exports/</code>.</p>
+      <p class="hint">CSV Exceliin, JSON arkistoon. Tiedostot myös <code>data/exports/</code>.</p>
       <div class="actions">
         <button type="button" class="primary" id="btnExportSave">Vie raportti (CSV+JSON levylle)</button>
         <a href="/api/export/day.csv"><button type="button">Lataa päivän CSV</button></a>
@@ -216,6 +285,15 @@
     </section>
   </div>
   <script>
+    const LAYOUT_SLOTS = {
+      a: ["a"],
+      a_b: ["a", "b"],
+      a_c: ["a", "c"],
+      a_b_c: ["a", "b", "c"],
+      c: ["c"],
+    };
+    const LABELS = { a: "Vasen lohko", b: "Oikea lohko", c: "Keittiön hävikki" };
+
     async function api(path, body) {
       const opts = body === undefined ? {} : {
         method: "POST",
@@ -232,6 +310,13 @@
       const p = n => String(n).padStart(2, "0");
       return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
     }
+    function syncHostVisibility() {
+      const layout = document.getElementById("scaleLayout").value;
+      const slots = new Set(LAYOUT_SLOTS[layout] || ["a"]);
+      document.querySelectorAll(".host-row").forEach((el) => {
+        el.classList.toggle("hidden", !slots.has(el.dataset.slot));
+      });
+    }
     function fillForm(cfg) {
       const f = document.getElementById("cfgForm");
       for (const [k, v] of Object.entries(cfg)) {
@@ -240,61 +325,92 @@
         if (el.type === "checkbox") el.checked = !!v;
         else el.value = v;
       }
+      syncHostVisibility();
     }
     function formPatch() {
       const f = document.getElementById("cfgForm");
+      const layout = f.scale_layout.value;
+      const slots = new Set(LAYOUT_SLOTS[layout] || ["a"]);
       const num = [
-        "threshold_g","settle_s","feedback_show_s","empty_g","empty_away_s",
+        "threshold_ok_g","threshold_g","settle_s","feedback_show_s","empty_g","empty_away_s",
         "start_delta_g","quantize_g","empty_bin_g","empty_bin_tolerance_g","prefill_waste_g",
-        "co2_factor_kg_per_kg",
+        "co2_factor_kg_per_kg","scale_a_port","scale_b_port","scale_c_port",
       ];
       const patch = {
         theme: f.theme.value,
         site_id: f.site_id.value,
+        kiosk_title: f.kiosk_title.value,
+        kiosk_location: f.kiosk_location.value,
+        scale_layout: layout,
         export_before_reset: f.export_before_reset.checked,
         feedback_smile_text: f.feedback_smile_text.value,
+        feedback_ok_text: f.feedback_ok_text.value,
         feedback_frown_text: f.feedback_frown_text.value,
+        scale_a_host: f.scale_a_host.value.trim(),
+        scale_b_host: f.scale_b_host.value.trim(),
+        scale_c_host: f.scale_c_host.value.trim(),
       };
       for (const k of num) patch[k] = Number(f.elements.namedItem(k).value);
+      // Clear unused hosts so validation stays clear when switching layouts later
+      if (!slots.has("a")) patch.scale_a_host = patch.scale_a_host || "";
+      if (!slots.has("b")) { /* keep stored value but not required */ }
+      if (!slots.has("c")) { /* keep */ }
       return patch;
     }
     function renderHealth(h) {
+      const scales = h.scales || [];
+      const parts = scales
+        .filter((s) => s.enabled)
+        .map((s) => `${(s.label || s.scale_id).split(" ")[0]} ${s.connected ? "ok" : "offline"}`);
       document.getElementById("healthLine").textContent =
-        `${h.mode || "—"} · ${h.connected ? "kytketty" : "ei yhteyttä"}`;
+        `${h.mode || "—"} · ${h.scale_layout || "—"} · ${parts.join(" · ") || "ei vaakaa"}`;
       const cells = [
-        ["Tila", h.connected ? "OK" : "Offline"],
+        ["Kokoonpano", h.scale_layout || "—"],
+        ["Kiosk", h.kiosk_enabled === false ? "ei" : "kyllä"],
         ["Mode", h.mode || "—"],
-        ["Vaihe", h.phase || "—"],
-        ["Virhe", h.error || "—"],
         ["Viimeisin poll", (h.last_poll_ok_at || "—").replace("T"," ").slice(0,19)],
-        ["Viimeisin g", h.last_event_g != null ? Number(h.last_event_g).toFixed(1) : "—"],
         ["Piste", h.site_id || "—"],
         ["Teema", h.theme || "—"],
       ];
+      for (const s of scales) {
+        if (!s.enabled) continue;
+        cells.push([s.label || s.scale_id, s.connected ? "OK" : "Offline"]);
+        if (s.host) cells.push([`${s.scale_id.toUpperCase()} IP`, `${s.host}:${s.port || 23}`]);
+        if (s.error) cells.push([`${s.scale_id.toUpperCase()} virhe`, s.error]);
+      }
       document.getElementById("healthBox").innerHTML = cells.map(([l,v]) =>
         `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`
       ).join("");
     }
-    function renderDay(payload) {
-      const s = payload.stats || {};
+    function renderStatsBox(el, s, withFeedback) {
       const smilePct = s.count ? Math.round(100 * (s.smile_count || 0) / s.count) : 0;
+      const okPct = s.count ? Math.round(100 * (s.ok_count || 0) / s.count) : 0;
       const cells = [
         ["Kpl", s.count ?? 0],
         ["Kg", ((s.total_g || 0) / 1000).toFixed(2)],
-        ["Avg g", Math.round(s.avg_g || 0)],
-        ["Max g", Math.round(s.max_g || 0)],
-        ["Hymy %", smilePct],
-        ["Suru", s.frown_count ?? 0],
+        ["Keskim. g", Math.round(s.avg_g || 0)],
+        ["Pienin g", s.min_g != null ? Math.round(s.min_g) : "—"],
       ];
-      document.getElementById("dayStats").innerHTML = cells.map(([l,v]) =>
+      if (withFeedback) {
+        cells.push(["Hyvä %", smilePct], ["Ok %", okPct], [
+          "Paljon %",
+          s.count ? Math.round(100 * (s.frown_count || 0) / s.count) : 0,
+        ]);
+      }
+      el.innerHTML = cells.map(([l,v]) =>
         `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`
       ).join("");
+    }
+    function renderDay(payload) {
+      renderStatsBox(document.getElementById("dayStatsPlate"), payload.plate || {}, true);
+      renderStatsBox(document.getElementById("dayStatsKitchen"), payload.kitchen || {}, false);
       const body = document.getElementById("eventsBody");
       const rows = payload.events || [];
       body.innerHTML = rows.length ? rows.map(e => {
         const ts = (e.ts || "").replace("T"," ").slice(0,19);
-        return `<tr><td>${ts}</td><td>${Number(e.grams).toFixed(1)}</td><td>${e.feedback}</td></tr>`;
-      }).join("") : `<tr><td colspan="3">Ei tapahtumia</td></tr>`;
+        const lab = LABELS[e.scale_id] || e.scale_id || "a";
+        return `<tr><td>${ts}</td><td>${lab}</td><td>${Number(e.grams).toFixed(1)}</td><td>${e.feedback}</td></tr>`;
+      }).join("") : `<tr><td colspan="4">Ei tapahtumia</td></tr>`;
     }
     async function loadConfig() {
       const j = await api("/api/config");
@@ -309,12 +425,12 @@
       document.getElementById("dayFilter").value = day;
       const j = await api(`/api/events?day=${encodeURIComponent(day)}&limit=100`);
       renderDay(j);
-      // refresh download links
       document.querySelectorAll('a[href^="/api/export/day"]').forEach(a => {
         const base = a.getAttribute("href").split("?")[0];
         a.setAttribute("href", `${base}?day=${encodeURIComponent(day)}`);
       });
     }
+    document.getElementById("scaleLayout").addEventListener("change", syncHostVisibility);
     document.getElementById("cfgForm").onsubmit = async (ev) => {
       ev.preventDefault();
       const msg = document.getElementById("cfgMsg");
@@ -334,9 +450,9 @@
     document.getElementById("btnBaseline").onclick = async () => {
       const msg = document.getElementById("cfgMsg");
       try {
-        const j = await api("/api/set-baseline", {});
+        const j = await api("/api/set-baseline", { scale: "a" });
         msg.className = "msg ok";
-        msg.textContent = `Baseline asetettu: ${j.baseline_g} g (ei jätetapahtumaa).`;
+        msg.textContent = `Baseline A asetettu: ${j.baseline_g} g (ei jätetapahtumaa).`;
       } catch (e) {
         msg.className = "msg err";
         msg.textContent = String(e.message || e);
