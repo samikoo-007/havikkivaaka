@@ -1,0 +1,22 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.log
+/tmp/
+.env
+.env.*
+
+# Runtime / lab data (events, live config, cal, exports)
+data/*
+!data/README.md
+!data/ykv_sad_cal.example.json
+
+*.sqlite3
+logs/
+temp/
+
+# Local editor noise (keep project skills/rules under .cursor/)
+*.swp
+*~

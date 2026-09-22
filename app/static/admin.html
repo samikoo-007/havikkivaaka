@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hävikkivaaka — Admin</title>
+  <style>
+    :root {
+      --bg: #f4f6f4;
+      --fg: #1a1f1c;
+      --muted: #5a6a5c;
+      --panel: #ffffff;
+      --border: #d0d8d0;
+      --accent: #2f6b3a;
+      --accent-fg: #fff;
+      --bad: #b3261e;
+      --ok: #1b7a3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Ubuntu", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 52rem; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
+    header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      flex-wrap: wrap; gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    h1 { margin: 0; font-size: 1.35rem; font-weight: 650; }
+    h2 { margin: 0 0 0.75rem; font-size: 1.05rem; font-weight: 650; }
+    a { color: var(--accent); }
+    .meta { color: var(--muted); font-size: 0.9rem; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      gap: 0.75rem 1rem;
+    }
+    label {
+      display: flex; flex-direction: column; gap: 0.3rem;
+      font-size: 0.85rem; color: var(--muted);
+    }
+    label.full { grid-column: 1 / -1; }
+    input[type="number"], input[type="text"], select, textarea {
+      font: inherit; color: var(--fg);
+      padding: 0.45rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+    }
+    textarea { min-height: 4.5rem; resize: vertical; line-height: 1.4; }
+    .check {
+      flex-direction: row; align-items: center; gap: 0.5rem;
+      color: var(--fg); font-size: 0.95rem;
+    }
+    .check input { width: 1.1rem; height: 1.1rem; }
+    .hint { font-size: 0.8rem; color: var(--muted); margin: 0.35rem 0 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+    button {
+      appearance: none; border: 0; border-radius: 6px;
+      padding: 0.55rem 0.9rem; font: inherit; cursor: pointer;
+      background: #e8ece8; color: var(--fg);
+    }
+    button.primary { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+    button:hover { filter: brightness(0.97); }
+    .status {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+      gap: 0.5rem;
+    }
+    .stat {
+      background: #f0f3f0;
+      border-radius: 6px;
+      padding: 0.55rem 0.7rem;
+    }
+    .stat .v { font-weight: 650; font-size: 1.05rem; }
+    .stat .l { font-size: 0.75rem; color: var(--muted); }
+    .msg { min-height: 1.3em; font-size: 0.9rem; margin-top: 0.5rem; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--bad); }
+    table {
+      width: 100%; border-collapse: collapse; font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      text-align: left; padding: 0.35rem 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+    .row-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Hävikkivaaka — Admin</h1>
+      <div class="meta"><a href="/">← Kiosk</a> · <span id="healthLine">—</span></div>
+    </header>
+
+    <section>
+      <h2>Laite / piste</h2>
+      <div class="status" id="healthBox"></div>
+    </section>
+
+    <section>
+      <h2>Päivän yhteenveto</h2>
+      <div class="row-tools">
+        <label>Päivä
+          <input type="text" id="dayFilter" placeholder="YYYY-MM-DD" />
+        </label>
+        <button type="button" id="btnReloadDay">Päivitä</button>
+      </div>
+      <div class="status" id="dayStats" style="margin-top:0.75rem"></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr><th>Aika</th><th>g</th><th>Palaute</th></tr>
+          </thead>
+          <tbody id="eventsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Asetukset</h2>
+      <form id="cfgForm">
+        <div class="grid">
+          <label>Hymy/suru-kynnys (g)
+            <input type="number" name="threshold_g" step="1" min="50" max="5000" required />
+          </label>
+          <label>Settle-aika (s)
+            <input type="number" name="settle_s" step="0.1" min="0.5" max="120" required />
+          </label>
+          <label>Palautteen näyttö (s)
+            <input type="number" name="feedback_show_s" step="0.1" min="0.5" max="30" required />
+          </label>
+          <label>Tyhjän lukeman kynnys empty_g (g)
+            <input type="number" name="empty_g" step="1" min="0" max="500" required />
+          </label>
+          <label>Tyhjennysviive empty_away_s (s)
+            <input type="number" name="empty_away_s" step="0.5" min="1" max="300" required />
+          </label>
+          <label>Aloitusdelta start_delta_g (g)
+            <input type="number" name="start_delta_g" step="1" min="5" max="500" required />
+          </label>
+          <label>Huojuntaraja quantize_g (g)
+            <input type="number" name="quantize_g" step="1" min="0" max="50" required />
+          </label>
+          <label>Tyhjän astian paino (g)
+            <input type="number" name="empty_bin_g" step="1" min="0" max="50000" />
+          </label>
+          <label>Astian toleranssi (g)
+            <input type="number" name="empty_bin_tolerance_g" step="1" min="1" max="2000" />
+          </label>
+          <label>Esitäytön baseline prefill_waste_g (g)
+            <input type="number" name="prefill_waste_g" step="1" min="0" max="50000" />
+          </label>
+          <label>CO₂-kerroin (kg CO₂ / kg hävikki)
+            <input type="number" name="co2_factor_kg_per_kg" step="0.1" min="0" max="50" />
+          </label>
+          <label>Piste-tunnus site_id
+            <input type="text" name="site_id" maxlength="64" />
+          </label>
+          <label>Kioskin teema
+            <select name="theme">
+              <option value="dark">Tumma</option>
+              <option value="light">Vaalea</option>
+            </select>
+          </label>
+          <label class="full">Hymy-palaute (teksti)
+            <textarea name="feedback_smile_text" maxlength="500" rows="2" required></textarea>
+          </label>
+          <label class="full">Suru-palaute (teksti)
+            <textarea name="feedback_frown_text" maxlength="1000" rows="3" required></textarea>
+          </label>
+          <label class="check full">
+            <input type="checkbox" name="export_before_reset" />
+            Vie raportti ennen päivän nollausta
+          </label>
+        </div>
+        <p class="hint">
+          Taara / auto-taara ei nollaa päivän kg. Tyhjän astian paino: kun astia palaa tyhjennyksen jälkeen
+          ja lukema ≈ tämä ± toleranssi → auto-taara. Esitäyttö / „Aseta baseline”: astia jossa jo jätettä
+          ei laske olemassa olevaa jätettä uutena tapahtumana.
+        </p>
+        <div class="actions">
+          <button type="submit" class="primary">Tallenna asetukset</button>
+          <button type="button" id="btnBaseline">Aseta baseline nykyisestä painosta</button>
+        </div>
+        <p class="msg" id="cfgMsg"></p>
+      </form>
+    </section>
+
+    <section>
+      <h2>Raportit</h2>
+      <p class="hint">Suositus: CSV Exceliin, JSON API-/arkistokäyttöön. Tiedostot myös <code>data/exports/</code>.</p>
+      <div class="actions">
+        <button type="button" class="primary" id="btnExportSave">Vie raportti (CSV+JSON levylle)</button>
+        <a href="/api/export/day.csv"><button type="button">Lataa päivän CSV</button></a>
+        <a href="/api/export/day.json"><button type="button">Lataa päivän JSON</button></a>
+        <button type="button" id="btnResetDay">Nollaa päivä</button>
+      </div>
+      <p class="msg" id="exportMsg"></p>
+    </section>
+  </div>
+  <script>
+    async function api(path, body) {
+      const opts = body === undefined ? {} : {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      };
+      const r = await fetch(path, opts);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.ok === false) throw new Error(j.error || r.statusText || "virhe");
+      return j;
+    }
+    function today() {
+      const d = new Date();
+      const p = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+    }
+    function fillForm(cfg) {
+      const f = document.getElementById("cfgForm");
+      for (const [k, v] of Object.entries(cfg)) {
+        const el = f.elements.namedItem(k);
+        if (!el) continue;
+        if (el.type === "checkbox") el.checked = !!v;
+        else el.value = v;
+      }
+    }
+    function formPatch() {
+      const f = document.getElementById("cfgForm");
+      const num = [
+        "threshold_g","settle_s","feedback_show_s","empty_g","empty_away_s",
+        "start_delta_g","quantize_g","empty_bin_g","empty_bin_tolerance_g","prefill_waste_g",
+        "co2_factor_kg_per_kg",
+      ];
+      const patch = {
+        theme: f.theme.value,
+        site_id: f.site_id.value,
+        export_before_reset: f.export_before_reset.checked,
+        feedback_smile_text: f.feedback_smile_text.value,
+        feedback_frown_text: f.feedback_frown_text.value,
+      };
+      for (const k of num) patch[k] = Number(f.elements.namedItem(k).value);
+      return patch;
+    }
+    function renderHealth(h) {
+      document.getElementById("healthLine").textContent =
+        `${h.mode || "—"} · ${h.connected ? "kytketty" : "ei yhteyttä"}`;
+      const cells = [
+        ["Tila", h.connected ? "OK" : "Offline"],
+        ["Mode", h.mode || "—"],
+        ["Vaihe", h.phase || "—"],
+        ["Virhe", h.error || "—"],
+        ["Viimeisin poll", (h.last_poll_ok_at || "—").replace("T"," ").slice(0,19)],
+        ["Viimeisin g", h.last_event_g != null ? Number(h.last_event_g).toFixed(1) : "—"],
+        ["Piste", h.site_id || "—"],
+        ["Teema", h.theme || "—"],
+      ];
+      document.getElementById("healthBox").innerHTML = cells.map(([l,v]) =>
+        `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`
+      ).join("");
+    }
+    function renderDay(payload) {
+      const s = payload.stats || {};
+      const smilePct = s.count ? Math.round(100 * (s.smile_count || 0) / s.count) : 0;
+      const cells = [
+        ["Kpl", s.count ?? 0],
+        ["Kg", ((s.total_g || 0) / 1000).toFixed(2)],
+        ["Avg g", Math.round(s.avg_g || 0)],
+        ["Max g", Math.round(s.max_g || 0)],
+        ["Hymy %", smilePct],
+        ["Suru", s.frown_count ?? 0],
+      ];
+      document.getElementById("dayStats").innerHTML = cells.map(([l,v]) =>
+        `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`
+      ).join("");
+      const body = document.getElementById("eventsBody");
+      const rows = payload.events || [];
+      body.innerHTML = rows.length ? rows.map(e => {
+        const ts = (e.ts || "").replace("T"," ").slice(0,19);
+        return `<tr><td>${ts}</td><td>${Number(e.grams).toFixed(1)}</td><td>${e.feedback}</td></tr>`;
+      }).join("") : `<tr><td colspan="3">Ei tapahtumia</td></tr>`;
+    }
+    async function loadConfig() {
+      const j = await api("/api/config");
+      fillForm(j.config);
+    }
+    async function loadHealth() {
+      const h = await api("/api/health");
+      renderHealth(h);
+    }
+    async function loadDay() {
+      const day = document.getElementById("dayFilter").value.trim() || today();
+      document.getElementById("dayFilter").value = day;
+      const j = await api(`/api/events?day=${encodeURIComponent(day)}&limit=100`);
+      renderDay(j);
+      // refresh download links
+      document.querySelectorAll('a[href^="/api/export/day"]').forEach(a => {
+        const base = a.getAttribute("href").split("?")[0];
+        a.setAttribute("href", `${base}?day=${encodeURIComponent(day)}`);
+      });
+    }
+    document.getElementById("cfgForm").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const msg = document.getElementById("cfgMsg");
+      msg.className = "msg";
+      msg.textContent = "Tallennetaan…";
+      try {
+        const j = await api("/api/config", formPatch());
+        fillForm(j.config);
+        msg.className = "msg ok";
+        msg.textContent = "Tallennettu — asetukset käytössä heti (hot-reload).";
+        loadHealth();
+      } catch (e) {
+        msg.className = "msg err";
+        msg.textContent = String(e.message || e);
+      }
+    };
+    document.getElementById("btnBaseline").onclick = async () => {
+      const msg = document.getElementById("cfgMsg");
+      try {
+        const j = await api("/api/set-baseline", {});
+        msg.className = "msg ok";
+        msg.textContent = `Baseline asetettu: ${j.baseline_g} g (ei jätetapahtumaa).`;
+      } catch (e) {
+        msg.className = "msg err";
+        msg.textContent = String(e.message || e);
+      }
+    };
+    document.getElementById("btnExportSave").onclick = async () => {
+      const msg = document.getElementById("exportMsg");
+      const day = document.getElementById("dayFilter").value.trim() || today();
+      try {
+        const j = await api("/api/export/day", { day });
+        msg.className = "msg ok";
+        msg.textContent = `Viety ${j.count} tapahtumaa → ${j.csv} ; ${j.json}`;
+      } catch (e) {
+        msg.className = "msg err";
+        msg.textContent = String(e.message || e);
+      }
+    };
+    document.getElementById("btnResetDay").onclick = async () => {
+      if (!confirm("Nollataanko tämän päivän tapahtumat? (vienti asetuksen mukaan)")) return;
+      const msg = document.getElementById("exportMsg");
+      try {
+        const j = await api("/api/reset-day", {});
+        msg.className = "msg ok";
+        const ex = j.exported ? ` Vienti: ${j.exported.csv}` : "";
+        msg.textContent = `Nollattu (${j.deleted} riviä).${ex}`;
+        loadDay();
+      } catch (e) {
+        msg.className = "msg err";
+        msg.textContent = String(e.message || e);
+      }
+    };
+    document.getElementById("btnReloadDay").onclick = () => loadDay();
+    document.getElementById("dayFilter").value = today();
+    loadConfig().catch(e => {
+      document.getElementById("cfgMsg").className = "msg err";
+      document.getElementById("cfgMsg").textContent = String(e.message || e);
+    });
+    loadHealth().catch(() => {});
+    loadDay().catch(() => {});
+    setInterval(() => { loadHealth().catch(() => {}); }, 3000);
+  </script>
+</body>
+</html>

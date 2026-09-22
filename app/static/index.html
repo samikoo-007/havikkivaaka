@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="fi" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hävikkivaaka</title>
+  <style>
+    :root, [data-theme="dark"] {
+      --bg: #1a1f1c;
+      --fg: #f2f5f0;
+      --muted: #9aa89a;
+      --ok: #6fbf73;
+      --bad: #e07070;
+      --panel: #242b27;
+      --accent: #c4a35a;
+      --header-border: #333;
+      --btn: #3a4540;
+      --btn-demo: #2f3d55;
+    }
+    [data-theme="light"] {
+      --bg: #eef2ee;
+      --fg: #1a1f1c;
+      --muted: #5a6a5c;
+      --ok: #1b7a3a;
+      --bad: #b3261e;
+      --panel: #ffffff;
+      --accent: #c4a35a;
+      --header-border: #cfd6cf;
+      --btn: #d5ddd6;
+      --btn-demo: #c5d0e0;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%;
+      background: var(--bg); color: var(--fg);
+      font-family: "Segoe UI", "Ubuntu", system-ui, sans-serif;
+      user-select: none;
+    }
+    .wrap {
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem 1.5rem;
+    }
+    header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      border-bottom: 1px solid var(--header-border); padding-bottom: 0.75rem;
+    }
+    header h1 { margin: 0; font-size: 1.4rem; letter-spacing: 0.04em; font-weight: 600; }
+    .meta { color: var(--muted); font-size: 0.95rem; }
+    .stage {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 1.25rem;
+      align-items: stretch;
+    }
+    @media (max-width: 900px) {
+      .stage { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      display: flex; flex-direction: column; justify-content: center;
+      min-height: 280px;
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+    .card.feedback-smile {
+      background: #1b7a3a;
+      color: #ffffff;
+    }
+    .card.feedback-frown {
+      background: #b3261e;
+      color: #ffffff;
+    }
+    .card.feedback-settling {
+      background: #e6c200;
+      color: #1a1a1a;
+    }
+    .face {
+      font-size: clamp(6rem, 22vw, 11rem);
+      line-height: 1; text-align: center;
+      transition: transform 0.2s ease, color 0.25s ease;
+    }
+    .face.smile,
+    .face.frown { color: #ffffff; }
+    .face.idle { color: var(--muted); font-size: clamp(3rem, 10vw, 5rem); }
+    .card.feedback-settling .face.idle {
+      color: #1a1a1a;
+    }
+    .card.feedback-smile .phase,
+    .card.feedback-frown .phase {
+      color: #f5f5f5;
+      text-transform: none;
+      letter-spacing: 0.02em;
+      font-size: clamp(1rem, 2.4vw, 1.25rem);
+      font-weight: 600;
+      line-height: 1.35;
+      max-width: 22ch;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .card.feedback-settling .phase {
+      color: #1a1a1a;
+      font-weight: 600;
+    }
+    .weight-card {
+      justify-content: flex-start;
+      align-items: center;
+      text-align: center;
+      gap: 0.5rem;
+    }
+    .weight-label {
+      flex-shrink: 0;
+      width: 100%;
+      text-align: center;
+      color: var(--fg);
+      font-size: clamp(1.35rem, 3.2vw, 1.85rem);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      line-height: 1.25;
+      margin: 0;
+    }
+    .weight-area {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      min-height: 0;
+    }
+    .weight {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      font-size: clamp(3.8rem, 14vw, 7rem);
+      font-variant-numeric: tabular-nums;
+      text-align: center; font-weight: 600;
+      line-height: 1;
+    }
+    .weight .unit {
+      font-size: 0.4em;
+      color: var(--muted);
+      margin-left: 0.15em;
+    }
+    .weight-card .err {
+      flex-shrink: 0;
+      margin: 0;
+      min-height: 1.2em;
+    }
+    .phase { text-align: center; color: var(--muted); margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; }
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;
+    }
+    .stat {
+      background: var(--panel); border-radius: 10px; padding: 0.9rem 1rem; text-align: center;
+    }
+    .stat .v { font-size: 1.5rem; font-weight: 600; }
+    .stat .l { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+    button {
+      appearance: none; border: 0; border-radius: 10px;
+      padding: 0.9rem 1.3rem; font-size: 1.05rem; cursor: pointer;
+      background: var(--btn); color: var(--fg); min-width: 7rem;
+    }
+    button:hover { filter: brightness(1.08); }
+    button.primary { background: var(--accent); color: #1a1a1a; font-weight: 600; }
+    button.demo { background: var(--btn-demo); }
+    .err { color: var(--bad); min-height: 1.2em; }
+    .bin-weight {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Hävikkivaaka</h1>
+      <div class="meta"><span id="mode">—</span> · <span id="conn">—</span></div>
+    </header>
+
+    <div class="stage">
+      <div class="card" id="feedbackCard">
+        <div id="face" class="face idle">•</div>
+        <div class="phase" id="phase">odottaa</div>
+      </div>
+      <div class="card weight-card">
+        <p class="weight-label">Ruokahävikkisi tänään</p>
+        <div class="weight-area">
+          <div class="weight"><span id="weight">0.0</span><span class="unit">g</span></div>
+        </div>
+        <p class="bin-weight" id="binWeight"></p>
+        <p class="err" id="err"></p>
+      </div>
+    </div>
+
+    <div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="c">0</div><div class="l">kpl tänään</div></div>
+        <div class="stat"><div class="v" id="t">0</div><div class="l">kg tänään</div></div>
+        <div class="stat"><div class="v" id="a">0</div><div class="l">Keskiarvo g / ruokailija</div></div>
+        <div class="stat"><div class="v" id="m">0</div><div class="l">max g</div></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="btnTare">Taara</button>
+        <button id="btnZero">Nollaa</button>
+        <button class="demo" id="btnSmile" title="mock">+150 g</button>
+        <button class="demo" id="btnFrown" title="mock">+400 g</button>
+        <button class="demo" id="btnEmpty" title="mock">Tyhjennä</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const phaseFi = {
+      idle: "odottaa",
+      settling: "tasaantuu…",
+      feedback: "palaute",
+      hold: "odottaa seuraavaa",
+      away: "tyhjennys — odota astiaa",
+    };
+    const feedbackMsgDefaults = {
+      smile: "Kiitos, olet ihana!",
+      frown: "Ota seuraavalla kerralla vähemmän, voit aina ottaa lisää jos ruoka on hyvää!",
+    };
+    let feedbackMsg = { ...feedbackMsgDefaults };
+    async function api(path, body) {
+      const opts = body === undefined ? {} : {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      };
+      const r = await fetch(path, opts);
+      return r.json();
+    }
+    function friendlyError(raw) {
+      if (!raw) return "";
+      const t = String(raw);
+      if (/Errno\s*113|No route to host|Network is unreachable|Connection refused/i.test(t)) {
+        return "Ei yhteyttä YKV:hen";
+      }
+      if (/timed? out|Timeout/i.test(t)) return "YKV ei vastaa";
+      if (/Errno|OSError|Connection|socket/i.test(t)) return "Odottaa vaakaa";
+      return t;
+    }
+    function applyTheme(theme) {
+      const t = theme === "light" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", t);
+    }
+    function render(s) {
+      if (s.theme || (s.config && s.config.theme)) {
+        applyTheme(s.theme || s.config.theme);
+      }
+      const cfg = s.config || {};
+      feedbackMsg = {
+        smile: (cfg.feedback_smile_text || "").trim() || feedbackMsgDefaults.smile,
+        frown: (cfg.feedback_frown_text || "").trim() || feedbackMsgDefaults.frown,
+      };
+      document.getElementById("mode").textContent = s.mode === "mock" ? "MOCK" : "YKV";
+      document.getElementById("conn").textContent = s.connected ? "kytketty" : "ei yhteyttä";
+      const live = s.live_addition_g ?? s.weight_g ?? 0;
+      const qg = Number(s.quantize_g ?? (s.config && s.config.quantize_g) ?? 2);
+      const dec = qg >= 1 ? 0 : 1;
+      document.getElementById("weight").textContent = Number(live).toFixed(dec);
+      const binEl = document.getElementById("binWeight");
+      if (binEl) {
+        const bin = s.bin_weight_g;
+        binEl.textContent =
+          bin == null ? "" : `vaaka ${Number(bin).toFixed(dec)} g`;
+      }
+      const phaseEl = document.getElementById("phase");
+      const card = document.getElementById("feedbackCard");
+      const face = document.getElementById("face");
+      card.classList.remove("feedback-smile", "feedback-frown", "feedback-settling");
+      if (!s.connected && s.mode !== "mock") {
+        phaseEl.textContent = "odottaa vaakaa";
+        face.textContent = "•";
+        face.className = "face idle";
+      } else if (s.feedback === "smile") {
+        card.classList.add("feedback-smile");
+        phaseEl.textContent = feedbackMsg.smile;
+        face.textContent = "☺";
+        face.className = "face smile";
+      } else if (s.feedback === "frown") {
+        card.classList.add("feedback-frown");
+        phaseEl.textContent = feedbackMsg.frown;
+        face.textContent = "☹";
+        face.className = "face frown";
+      } else {
+        phaseEl.textContent = phaseFi[s.phase] || s.phase;
+        if (s.phase === "settling") {
+          card.classList.add("feedback-settling");
+          face.textContent = "…";
+        } else if (s.phase === "away") {
+          face.textContent = "↺";
+        } else {
+          face.textContent = "•";
+        }
+        face.className = "face idle";
+      }
+      document.getElementById("err").textContent = friendlyError(s.error);
+      document.getElementById("c").textContent = s.day.count;
+      document.getElementById("t").textContent = (s.day.total_g / 1000).toFixed(2);
+      document.getElementById("a").textContent = Math.round(s.day.avg_g);
+      document.getElementById("m").textContent = Math.round(s.day.max_g);
+      const demo = s.mode === "mock";
+      ["btnSmile", "btnFrown", "btnEmpty"].forEach(id => {
+        document.getElementById(id).style.display = demo ? "" : "none";
+      });
+    }
+    async function tick() {
+      try {
+        const s = await api("/api/state");
+        render(s);
+      } catch (e) {
+        document.getElementById("err").textContent = "Odottaa vaakaa";
+        document.getElementById("conn").textContent = "ei yhteyttä";
+        document.getElementById("phase").textContent = "odottaa vaakaa";
+      }
+    }
+    document.getElementById("btnTare").onclick = () => api("/api/tare", {});
+    document.getElementById("btnZero").onclick = async () => {
+      await api("/api/reset-day", {});
+      tick();
+    };
+    document.getElementById("btnSmile").onclick = () => api("/api/demo/add", { grams: 150 });
+    document.getElementById("btnFrown").onclick = () => api("/api/demo/add", { grams: 400 });
+    document.getElementById("btnEmpty").onclick = () => api("/api/demo/set", { grams: 0 });
+    setInterval(tick, 400);
+    tick();
+  </script>
+</body>
+</html>

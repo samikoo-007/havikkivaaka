@@ -1,0 +1,12 @@
+---
+description: Mac YKV diagnostic listen is opt-in; wait for an explicit command this turn.
+alwaysApply: true
+---
+
+# Mac YKV diagnostic listen
+
+Do **not** start Mac↔YKV listen, DHCP, or `listen-ykv.sh` unless the user explicitly asks **this turn** (phrases: "kuuntele lähetintä", "aloita kuuntelu", "Mac suora kaapeli", "listen-ykv", "varakuuntelu").
+
+When they do, follow [`docs/mac-ykv-listen.md`](docs/mac-ykv-listen.md) and the havikkivaaka-lab skill: USB-Ethernet (not Wi-Fi `en0`), Mac `192.168.50.1/24` with **no default gateway**, YKV `192.168.50.11:23`, DHCP bind **only** `.1:67` (never `0.0.0.0`).
+
+Read-only (`SI`/`SIR`/`I1`). No `T`/`Z` unless asked. One cable: Mac↔YKV **or** Mac↔Lenovo **or** Lenovo↔YKV. Mac listen success is **not** Ubuntu stack success.
