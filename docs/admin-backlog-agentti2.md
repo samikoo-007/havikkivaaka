@@ -90,7 +90,7 @@ Kartta: Agentti 3 §3 (admin omistaa) + kilpailija-analyysi §4 Must adminille +
 | M-A9 | **Päivän pienin g** + footer-labelit | UI-lock 2026-09-22 | `day.max_g`; label “Keskiarvo g / ruokailija” | Storage/API: `min_g`; kiosk footer: `kpl` · `kg` · `keskimäärin g / palautus` · `Päivän pienin g` (ei “tänään”); tyhjä → `—` |
 | M-A10 | **Vaakakokoonpanot A / A+B / A+C / A+B+C / C** — **hyväksytty** | Käyttäjä 2026-09-22 | **Toteutettu** | Config `scale_layout`; kiinteät nimet; hostit Administa; C = data only, tilastot erillään; kiosk full-width A / split A+B / ei kioskia jos vain C |
 | M-A11 | **Kenttäkohtaiset (i)-ohjeet Adminissa** — **hyväksytty** | Käyttäjä 2026-09-22 | **Toteutettu** (hover) | (i) + **hover**-tooltip FI |
-| M-A12 | **Päivittäinen virta-aikataulu + päivän vienti/nollaus** — **hyväksytty** | Käyttäjä 2026-09-22 | Ei | Edge: RTC wake + sammutustimer; YKV+näyttö katkaisijalla OFF; export+reset **ennen sammutusta** (+ boot-varmistus); Admin: kellonajat (valinnainen) |
+| M-A12 | **Päivittäinen virta-aikataulu + päivän vienti/nollaus** — **hyväksytty** | Käyttäjä 2026-09-22 | **Skriptit tehty** (`install-power-schedule.sh`); Admin-kellot UI optional | Edge RTC + sammutustimer; YKV+näyttö katkaisija; docs/power-schedule.md |
 
 ### Should
 

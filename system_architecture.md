@@ -1,7 +1,9 @@
 # Hävikkivaaka — system architecture
 
 ## Goal
-Customer plate-waste weighing: KFP → **YKV-02** → Ethernet KCP → host → kiosk UI (smile/frown).
+Customer plate-waste weighing: KFP → **YKV-02** → Ethernet KCP → host → kiosk UI (smile/ok/frown).
+
+**Hankinta / kokoonpano-suositus (KERN via Prodi):** [`docs/kokoonpano-suositus.md`](docs/kokoonpano-suositus.md) — ostopaikka [prodi.fi](https://prodi.fi/).
 
 Product feature gaps vs competitors (admin + kiosk backlog): [`docs/kilpailija-ominaisuusanalyysi.md`](docs/kilpailija-ominaisuusanalyysi.md).
 
@@ -65,13 +67,17 @@ Lab without switch: one Ethernet cable at a time (Mac↔Lenovo **or** Lenovo↔Y
 - `scripts/listen-ykv.sh` + `tools/kcp_listen.py` — read-only KCP listen (Mac or Linux); no tare/zero
 - `havikki-kiosk-app.service` — live `python3 -m app.server` as user `sami`, `Restart=always`
 - `scripts/install-kiosk-autostart.sh` — units + LightDM autologin + XFCE autostart
+- `scripts/install-power-schedule.sh` — evening day-close timer + boot ensure + RTC helpers ([`docs/power-schedule.md`](docs/power-schedule.md))
+- `scripts/havikki-day-close.sh` / `havikki-day-boot-ensure.sh` / `havikki-rtc-wake.sh` — export+reset, missed-close safety, RTC wakealarm
 - `tools/kcp_mock.py` — fake YKV over TCP (default `:2323`); optional HTTP control `:2324` (`POST /set`, `/add`, `/zero`) so Mac can emulate scale for Lenovo over USB-Ethernet
 - No Docker on lab host
 
 ### Boot flow (dealer kiosk)
 1. `network-online` → `havikki-ykv-link` (EEE + DHCP for YKV)
 2. `havikki-kiosk-app` → HTTP `0.0.0.0:8080`, KCP `192.168.50.11:23`
-3. LightDM autologin `sami` → autostart Chromium kiosk (`--browser-only`)
+3. `havikki-day-boot-ensure` (oneshot) — missed evening close
+4. LightDM autologin `sami` → autostart Chromium kiosk (`--browser-only`)
+5. Evening: `havikki-day-close.timer` → export+reset → RTC wake → `poweroff` (YKV/näyttö katkaisija erikseen)
 
 ### Lab UI mode (mock, no YKV)
 Temporary override when working on dashboard without scale (not for dealer boot):
@@ -95,12 +101,14 @@ Tuotantotavoite: automaattinen päivärytmi ilman pilveä.
 | **YKV + diner-näyttö(t)** | Virta **OFF** päivän päätteeksi | **Katkaisija** (manuaalinen tai ajastettu pistorasia/rele) — erillään edge-PC:stä. Aamulla virta ON ennen/kanssa RTC-herätyksen. |
 | **Päivän nollaus + tallennus** | Edellisen päivän CSV/JSON + `reset-day` | **Ensisijaisesti juuri ennen sammutusta** (timer-skripti: export → reset → `poweroff`). **Varalla heti bootissa**, jos edellinen päivä jäi nollaamatta (esim. kova katkaisu / timer ohitettu). `export_before_reset` jo configissa. |
 
-**Järjestys illalla (suositus):** (1) export + reset-day → (2) `poweroff` edge → (3) katkaisija OFF YKV + näytöt (henkilökunta tai ajastin ~minuutti softasammutuksen jälkeen).  
-**Aamulla:** katkaisija ON → RTC herättää edgen → `havikki-ykv-link` + kiosk-app + Chromium.
+**Järjestys illalla (suositus):** (1) export + reset-day → (2) RTC arm → `poweroff` edge → (3) katkaisija OFF YKV + näytöt (henkilökunta tai ajastin ~minuutti softasammutuksen jälkeen).  
+**Aamulla:** katkaisija ON → RTC herättää edgen → `havikki-ykv-link` + kiosk-app + Chromium (+ `havikki-day-boot-ensure` jos eilinen close jäi väliin).
+
+**Skriptit:** `scripts/install-power-schedule.sh`, `havikki-day-close.sh`, `havikki-day-boot-ensure.sh`, `havikki-rtc-wake.sh` — ohje [`docs/power-schedule.md`](docs/power-schedule.md).
 
 **Ei oletuksena:** edge-PC samalla releellä kuin YKV (RTC-wake vaatii PC:n ACC standby / G3-tilan emolevyn mukaan — testaa kohdekoneella).
 
-Backlog: Adminin kellonajat + skripti (`docs/admin-backlog-agentti2.md` M-A12).
+Backlog: Adminin kellonajat UI (valinnainen); skriptit **tehty** (M-A12).
 
 **Back to live YKV** (from mock):
 ```bash

@@ -1,7 +1,9 @@
 # Roadmap: testikokoonpano → tuotantokloonaus
 
 **Status:** vaihe 1 live YKV+SAD kiosk todennettu Lenovolla (2026-09-22). Seuraava: vaihe 3 UI (dual-scale, admin) + vaihe 2/4 monistus puhtaalle Ubuntulle.  
-**Periaate:** Lenovo-lab on *testikokoonpano*. Repo + skill [`havikkivaaka-kiosk-deploy`](../.cursor/skills/havikkivaaka-kiosk-deploy/SKILL.md) on tapa monistaa sama kiosk mihin tahansa (X)Ubuntu-koneeseen.
+**Periaate:** Lenovo-lab on *testikokoonpano*. Repo + skill [`havikkivaaka-kiosk-deploy`](../.cursor/skills/havikkivaaka-kiosk-deploy/SKILL.md) on tapa monistaa sama kiosk mihin tahansa (X)Ubuntu-koneeseen.  
+**Hankinta:** KERN-alustat + YKV-02 → [`kokoonpano-suositus.md`](kokoonpano-suositus.md) ([prodi.fi](https://prodi.fi/)).  
+**Päivärytmi:** [`power-schedule.md`](power-schedule.md).
 
 ---
 

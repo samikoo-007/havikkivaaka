@@ -8,6 +8,7 @@ This directory holds local runtime files. They are gitignored except the example
 | `config.json` | Admin settings (created on first run) |
 | `events.sqlite3` | Waste events |
 | `exports/` | Day CSV/JSON exports |
+| `day-close-stamps/` | Evening close markers (`YYYY-MM-DD.ok`) for power schedule |
 
 ## SAD calibration
 

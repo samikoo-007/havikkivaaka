@@ -108,6 +108,9 @@ sudo ./scripts/bootstrap-xubuntu.sh
 # Boot kiosk (systemd + LightDM + Chromium)
 sudo ./scripts/install-kiosk-autostart.sh
 
+# Production daily power (RTC wake + evening close) — docs/power-schedule.md
+# sudo ./scripts/install-power-schedule.sh
+
 # Manual
 ./scripts/start-kiosk.sh              # mock
 ./scripts/start-kiosk.sh --live       # YKV

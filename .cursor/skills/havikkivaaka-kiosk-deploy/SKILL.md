@@ -41,6 +41,7 @@ Deploy progress:
 - [ ] 7. CAT6 edge ↔ YKV; sudo ./scripts/enable-ykv-link.sh (or reboot)
 - [ ] 8. Verify: ping .11, connected=true, weight moves with load
 - [ ] 9. Reboot once; confirm kiosk autostarts
+- [ ] 10. (Tuotanto) BIOS RTC wake + `sudo ./scripts/install-power-schedule.sh` — [`docs/power-schedule.md`](../../docs/power-schedule.md); YKV/näyttö katkaisija erikseen
 ```
 
 ## Commands (copy)
@@ -57,8 +58,9 @@ sudo ./scripts/enable-ykv-link.sh
 sudo systemctl restart havikki-kiosk-app
 curl -s http://127.0.0.1:8080/api/state   # mode=live, connected, weight_g / bin_weight_g
 
-# From admin PC on same LAN (switch or second NIC):
-#   http://192.168.50.10:8080/admin
+# Production daily power (optional; BIOS RTC wake required):
+# sudo ./scripts/install-power-schedule.sh
+# docs/power-schedule.md
 ```
 
 ### Env knobs
