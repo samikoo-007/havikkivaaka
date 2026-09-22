@@ -3,7 +3,7 @@
 ## Goal
 Customer plate-waste weighing: KFP → **YKV-02** → Ethernet KCP → host → kiosk UI (smile/ok/frown).
 
-**Hankinta / kokoonpano-suositus (KERN via Prodi):** [`docs/kokoonpano-suositus.md`](docs/kokoonpano-suositus.md) — ostopaikka [prodi.fi](https://prodi.fi/).
+**Hankinta / kokoonpano-suositus:** [`docs/kokoonpano-suositus.md`](docs/kokoonpano-suositus.md) — KERN via [Prodi](https://prodi.fi/); edge/näyttö/kytkin-matriisi Proshop + Verkkokauppa.com (layout A).
 
 Product feature gaps vs competitors (admin + kiosk backlog): [`docs/kilpailija-ominaisuusanalyysi.md`](docs/kilpailija-ominaisuusanalyysi.md).
 

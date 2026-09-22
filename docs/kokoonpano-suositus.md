@@ -37,10 +37,50 @@ Kiinteät nimet Adminissa: **Vasen lohko** (A) · **Oikea lohko** (B) · **Keitt
 
 | Osa | Suositus | Huom |
 |-----|----------|------|
-| PC | miniPC / NUC / vastaava, **Ubuntu/Xubuntu Desktop** | BIOS: **RTC wake** (päiväsammutus) |
-| Näyttö | Full HD ~27″ diner-seinä / teline | Display-only kiosk; virta **katkaisijalla** YKV:n kanssa |
-| Verkko | Pieni **kytkin** (tai USB-Ethernet labissa) | Offline LAN; admin toiselta PC:ltä |
+| PC | **GMKtec G3S** (N95, 16 Gt, 512 Gt) → Xubuntu | BIOS: **S5 RTC Wake / Fixed Time** (testaa `rtcwake`); Win11 pyyhitään |
+| Näyttö | **LG 27MS500-B** 27″ FHD IPS | Display-only; virta **katkaisijalla** YKV:n kanssa |
+| Verkko | **TP-Link TL-SG105** (5× Gigabit) | Offline LAN; admin toiselta PC:ltä |
 | Virta | Ajastettu / manuaalinen **katkaisija** YKV + näyttö | Edge herää RTC:llä; ei samalla releellä oletuksena |
+
+### Hankintamatriisi — layout **A** (1 piste)
+
+Hinnat / saatavuus tarkistettu **2026-09-22** (sis. ALV). Vahvista myyjän sivulla ennen tilausta.
+
+#### Proshop.fi — edge PC
+
+| # | Tuote | Linkki | Hinta (arvio) | Huom |
+|---|--------|--------|---------------|------|
+| 1 | GMKtec G3S · Intel N95 · 16 Gt · 512 Gt · Win11 Pro | [Proshop 3444065](https://www.proshop.fi/Poeytaetietokoneet-Mini-PC-Barebone/GMKtec-G3S-Intel-N95-16GB-512GB-Windows-11-Pro/3444065) | ~392,85 € | Mukana HDMI + VESA. **1× RJ45 Gigabit** (ei kahta LAN:ia — myyntiteksti harhaanjohtava). RTC Fixed Time + `rtcwake` testattava. |
+
+#### Verkkokauppa.com — näyttö, verkko, kaapelit, huoltonäppis
+
+| # | Tuote | Linkki | Hinta (arvio) | Huom |
+|---|--------|--------|---------------|------|
+| 1 | LG 27MS500-B 27″ Full HD IPS | [990091](https://www.verkkokauppa.com/fi/product/990091/LG-27MS500-B-27-Full-HD-naytto) | ~99 € (kampanja → 4.10.2026; norm. 129 €) | HDMI mukana paketissa |
+| 1 | TP-Link TL-SG105 5-port Gigabit | [347651](https://www.verkkokauppa.com/fi/product/347651/TP-LINK-TL-SG105-5-porttinen-kytkin) | ~21,99 € | Hallitsematon; riittää |
+| 1 | Logitech MK270 näppis + hiiri | [161770](https://www.verkkokauppa.com/fi/product/161770/Logitech-MK270-nappaimisto-ja-hiiri) | ~30,99 € | Vain asennus/admin (kiosk display-only) |
+| 3 | Fuj:tech CAT6A U/UTP 10 m | [878002](https://www.verkkokauppa.com/fi/product/878002/Fuj-tech-CAT6A-U-UTP-verkkokaapeli-10-m-valkoinen) | ~3 × 13,99 € | Edge↔kytkin, YKV↔kytkin, varalla/admin |
+| 0–1 | Fuj:tech HDMI 5 m (valinnainen) | [914479](https://www.verkkokauppa.com/fi/product/914479/Fuj-tech-HDMI-2-1-8K-Certified-Ultra-High-Speed-Cable-5-m-Wh) | ~29,99 € | Tarvitaan vain jos PC ei VESA-näytön takana (G3S/LG tuovat lyhyen HDMI:n) |
+
+**VK-tilaus yht. (ilman erillistä HDMI):** ~99 + 22 + 31 + 42 ≈ **194 €**  
+**Proshop + VK (ilman erillistä HDMI):** ≈ **587 €** (+ toimitukset)  
+**+ 5 m HDMI:** ≈ **617 €**
+
+#### Kaapelointi (layout A)
+
+```text
+[YKV-02] --CAT6--\
+[G3S]    --CAT6--+-- [TL-SG105] --CAT6-- [admin-läppäri tarvittaessa]
+[LG]     --HDMI-- [G3S]
+```
+
+**A+B / A+C / A+B+C:** lisää 1 CAT6 + 1 YKV(+alusta) per lisävaaka; kytkin 5 porttia riittää A+B+admin (+1 varalla). Kolme vaakaa + admin → harkitse 8-porttia (esim. TL-SG108).
+
+#### Ostojärjestys
+
+1. Verkkokauppa.com (näyttökampanja + kytkin + kaapelit + MK270).  
+2. Proshop G3S.  
+3. Koneelle: Xubuntu LTS → RTC-testi → [`havikkivaaka-kiosk-deploy`](../.cursor/skills/havikkivaaka-kiosk-deploy/SKILL.md).
 
 ### Punnitus (Prodi / KERN)
 
@@ -87,3 +127,5 @@ Admin LAN: `http://<edge-ip>:8080/admin` — otsikko, sijainti, layout, hostit, 
 - [`power-schedule.md`](power-schedule.md) — RTC + sammutus + day-close
 - [`roadmap-deployment.md`](roadmap-deployment.md) — lab → kloonaus
 - [`dealer-day-checklist.md`](dealer-day-checklist.md) — demopäivä
+
+> **Hankintamatriisi (Proshop + Verkkokauppa)** yllä § *Hankintamatriisi — layout A*. Hinnat vanhenevat; päivitä tarkistus päivämäärä tilauksen yhteydessä.
