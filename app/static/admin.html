@@ -124,6 +124,17 @@
     th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
     .row-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
     .host-row.hidden { display: none; }
+    #pinGate {
+      display: none;
+      margin-bottom: 1rem;
+      border-color: var(--accent);
+    }
+    #pinGate.visible { display: block; }
+    #appMain.locked { opacity: 0.45; pointer-events: none; }
+    #pinGate .pin-row {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end;
+    }
+    #pinGate input[type="password"] { max-width: 12rem; }
   </style>
 </head>
 <body>
@@ -133,6 +144,20 @@
       <div class="meta"><a href="/">← Kiosk</a> · <span id="healthLine">—</span></div>
     </header>
 
+    <section id="pinGate">
+      <h2>Admin-PIN</h2>
+      <p class="hint">Eristetyn kytkin-LAN:in hallinta. PIN asetetaan asennuksessa (<code>HAVIKKI_ADMIN_PIN</code>).</p>
+      <div class="pin-row">
+        <label>PIN
+          <input type="password" id="pinInput" autocomplete="current-password" inputmode="numeric" />
+        </label>
+        <button type="button" class="primary" id="btnPinUnlock">Avaa</button>
+        <button type="button" id="btnPinClear">Tyhjennä</button>
+      </div>
+      <p class="msg" id="pinMsg"></p>
+    </section>
+
+    <div id="appMain">
     <section>
       <h2>Laite / piste</h2>
       <div class="status" id="healthBox"></div>
@@ -277,12 +302,13 @@
       <p class="hint">CSV Exceliin, JSON arkistoon. Tiedostot myös <code>data/exports/</code>.</p>
       <div class="actions">
         <button type="button" class="primary" id="btnExportSave">Vie raportti (CSV+JSON levylle)</button>
-        <a href="/api/export/day.csv"><button type="button">Lataa päivän CSV</button></a>
-        <a href="/api/export/day.json"><button type="button">Lataa päivän JSON</button></a>
+        <button type="button" id="btnDlCsv">Lataa päivän CSV</button>
+        <button type="button" id="btnDlJson">Lataa päivän JSON</button>
         <button type="button" id="btnResetDay">Nollaa päivä</button>
       </div>
       <p class="msg" id="exportMsg"></p>
     </section>
+    </div><!-- #appMain -->
   </div>
   <script>
     const LAYOUT_SLOTS = {
@@ -293,18 +319,67 @@
       c: ["c"],
     };
     const LABELS = { a: "Vasen lohko", b: "Oikea lohko", c: "Keittiön hävikki" };
+    const PIN_KEY = "havikki_admin_pin";
+    let pinHeader = "X-Havikki-Pin";
+    let authRequired = false;
+
+    function getPin() {
+      return sessionStorage.getItem(PIN_KEY) || "";
+    }
+    function setPin(v) {
+      if (v) sessionStorage.setItem(PIN_KEY, v);
+      else sessionStorage.removeItem(PIN_KEY);
+    }
+    function setLocked(locked) {
+      document.getElementById("appMain").classList.toggle("locked", locked);
+      document.getElementById("pinGate").classList.toggle("visible", authRequired);
+    }
 
     async function api(path, body) {
-      const opts = body === undefined ? {} : {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      };
+      const headers = {};
+      const pin = getPin();
+      if (pin) headers[pinHeader] = pin;
+      const opts = body === undefined
+        ? { headers }
+        : {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          };
       const r = await fetch(path, opts);
       const j = await r.json().catch(() => ({}));
+      if (r.status === 401 || j.auth_required) {
+        setLocked(true);
+        const msg = document.getElementById("pinMsg");
+        msg.className = "msg err";
+        msg.textContent = j.error || "Anna Admin-PIN";
+        throw new Error(j.error || "Admin PIN vaaditaan");
+      }
       if (!r.ok || j.ok === false) throw new Error(j.error || r.statusText || "virhe");
       return j;
     }
+
+    async function downloadExport(kind) {
+      const day = document.getElementById("dayFilter").value.trim() || today();
+      const path = `/api/export/day.${kind}?day=${encodeURIComponent(day)}`;
+      const headers = {};
+      const pin = getPin();
+      if (pin) headers[pinHeader] = pin;
+      const r = await fetch(path, { headers });
+      if (r.status === 401) {
+        setLocked(true);
+        throw new Error("Admin PIN vaaditaan");
+      }
+      if (!r.ok) throw new Error(r.statusText || "lataus epäonnistui");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `havikkivaaka-${day}.${kind}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     function today() {
       const d = new Date();
       const p = n => String(n).padStart(2, "0");
@@ -351,10 +426,7 @@
         scale_c_host: f.scale_c_host.value.trim(),
       };
       for (const k of num) patch[k] = Number(f.elements.namedItem(k).value);
-      // Clear unused hosts so validation stays clear when switching layouts later
       if (!slots.has("a")) patch.scale_a_host = patch.scale_a_host || "";
-      if (!slots.has("b")) { /* keep stored value but not required */ }
-      if (!slots.has("c")) { /* keep */ }
       return patch;
     }
     function renderHealth(h) {
@@ -415,6 +487,7 @@
     async function loadConfig() {
       const j = await api("/api/config");
       fillForm(j.config);
+      setLocked(false);
     }
     async function loadHealth() {
       const h = await api("/api/health");
@@ -425,11 +498,51 @@
       document.getElementById("dayFilter").value = day;
       const j = await api(`/api/events?day=${encodeURIComponent(day)}&limit=100`);
       renderDay(j);
-      document.querySelectorAll('a[href^="/api/export/day"]').forEach(a => {
-        const base = a.getAttribute("href").split("?")[0];
-        a.setAttribute("href", `${base}?day=${encodeURIComponent(day)}`);
-      });
     }
+    async function boot() {
+      const auth = await fetch("/api/auth").then((r) => r.json()).catch(() => ({}));
+      authRequired = !!auth.auth_required;
+      if (auth.pin_header) pinHeader = auth.pin_header;
+      document.getElementById("pinGate").classList.toggle("visible", authRequired);
+      if (authRequired && !getPin()) {
+        setLocked(true);
+        document.getElementById("pinMsg").textContent = "Anna PIN jatkaaksesi.";
+      } else {
+        setLocked(false);
+        await loadConfig().catch((e) => {
+          document.getElementById("cfgMsg").className = "msg err";
+          document.getElementById("cfgMsg").textContent = String(e.message || e);
+        });
+        await loadDay().catch(() => {});
+      }
+      await loadHealth().catch(() => {});
+      setInterval(() => { loadHealth().catch(() => {}); }, 3000);
+    }
+    document.getElementById("btnPinUnlock").onclick = async () => {
+      const v = document.getElementById("pinInput").value.trim();
+      setPin(v);
+      const msg = document.getElementById("pinMsg");
+      try {
+        await loadConfig();
+        await loadDay();
+        msg.className = "msg ok";
+        msg.textContent = "Avattu.";
+        document.getElementById("pinInput").value = "";
+      } catch (e) {
+        setPin("");
+        msg.className = "msg err";
+        msg.textContent = String(e.message || e);
+      }
+    };
+    document.getElementById("btnPinClear").onclick = () => {
+      setPin("");
+      document.getElementById("pinInput").value = "";
+      if (authRequired) setLocked(true);
+      document.getElementById("pinMsg").textContent = "PIN tyhjennetty.";
+    };
+    document.getElementById("pinInput").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") document.getElementById("btnPinUnlock").click();
+    });
     document.getElementById("scaleLayout").addEventListener("change", syncHostVisibility);
     document.getElementById("cfgForm").onsubmit = async (ev) => {
       ev.preventDefault();
@@ -470,6 +583,28 @@
         msg.textContent = String(e.message || e);
       }
     };
+    document.getElementById("btnDlCsv").onclick = async () => {
+      const msg = document.getElementById("exportMsg");
+      try {
+        await downloadExport("csv");
+        msg.className = "msg ok";
+        msg.textContent = "CSV ladattu.";
+      } catch (e) {
+        msg.className = "msg err";
+        msg.textContent = String(e.message || e);
+      }
+    };
+    document.getElementById("btnDlJson").onclick = async () => {
+      const msg = document.getElementById("exportMsg");
+      try {
+        await downloadExport("json");
+        msg.className = "msg ok";
+        msg.textContent = "JSON ladattu.";
+      } catch (e) {
+        msg.className = "msg err";
+        msg.textContent = String(e.message || e);
+      }
+    };
     document.getElementById("btnResetDay").onclick = async () => {
       if (!confirm("Nollataanko tämän päivän tapahtumat? (vienti asetuksen mukaan)")) return;
       const msg = document.getElementById("exportMsg");
@@ -486,13 +621,7 @@
     };
     document.getElementById("btnReloadDay").onclick = () => loadDay();
     document.getElementById("dayFilter").value = today();
-    loadConfig().catch(e => {
-      document.getElementById("cfgMsg").className = "msg err";
-      document.getElementById("cfgMsg").textContent = String(e.message || e);
-    });
-    loadHealth().catch(() => {});
-    loadDay().catch(() => {});
-    setInterval(() => { loadHealth().catch(() => {}); }, 3000);
+    boot();
   </script>
 </body>
 </html>

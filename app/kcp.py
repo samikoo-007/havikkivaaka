@@ -155,6 +155,19 @@ def load_sad_cal(path: Path | None = None) -> dict[str, float] | None:
         return None
 
 
+def load_sad_cal_for_slot(
+    slot: str, data_dir: Path | None = None
+) -> dict[str, float] | None:
+    """Per-slot cal: ykv_sad_cal_{a|b|c}.json, else shared ykv_sad_cal.json."""
+    base = data_dir or (Path(__file__).resolve().parents[1] / "data")
+    sid = (slot or "a").strip().lower()[:8] or "a"
+    for name in (f"ykv_sad_cal_{sid}.json", "ykv_sad_cal.json"):
+        cal = load_sad_cal(base / name)
+        if cal is not None:
+            return cal
+    return None
+
+
 def grams_from_sad(
     sad: int, cal: dict[str, float], *, tare_g: float = 0.0
 ) -> float:

@@ -25,23 +25,26 @@ Day-to-day lab (Mac cable, mock): [`havikkivaaka-lab`](../havikkivaaka-lab/SKILL
 | YKV | DHCP → `192.168.50.11:23` KCP |
 | Weight | **`data/ykv_sad_cal.json`** + KCP `SAD` (not raw `SI` kg) |
 | App | `python3 -m app.server --host 192.168.50.11 --port 23 --http-host 0.0.0.0 --http-port 8080` |
-| UI | Chromium kiosk `http://127.0.0.1:8080/` ; admin `http://<edge-ip>:8080/admin` |
+| UI | Chromium kiosk `http://127.0.0.1:8080/` ; admin `http://<edge-ip>:8080/admin` + PIN |
 | Boot | `havikki-ykv-link` + `havikki-kiosk-app` + LightDM autologin |
+| Secrets | `/etc/havikkivaaka/env` (`HAVIKKI_ADMIN_PIN`, chmod 600) — never git |
+
+**Network:** isolated switch/cable only — see [`system_architecture.md`](../../system_architecture.md) *Network model*. Do not plug the YKV NIC into the building LAN.
 
 ## Deploy checklist (new machine)
 
 ```
 Deploy progress:
-- [ ] 1. Install (X)Ubuntu Desktop; create user (e.g. sami) with sudo
-- [ ] 2. Clone/copy repo → ~/havikkivaaka
+- [ ] 1. Install (X)Ubuntu Desktop; create sudo user
+- [ ] 2. Clone repo → ~/havikkivaaka
 - [ ] 3. sudo ./scripts/bootstrap-xubuntu.sh
-- [ ] 4. Set iface/IP env if not enp1s0 / .10 (see Env)
-- [ ] 5. sudo ./scripts/install-kiosk-autostart.sh   # live units, no mock.conf
-- [ ] 6. Commission YKV + SAD cal (ykv-commissioning skill) → data/ykv_sad_cal.json on host
-- [ ] 7. CAT6 edge ↔ YKV; sudo ./scripts/enable-ykv-link.sh (or reboot)
-- [ ] 8. Verify: ping .11, connected=true, weight moves with load
+- [ ] 4. Optional: HAVIKKI_IFACE / HAVIKKI_USER / HAVIKKI_ADMIN_PIN
+- [ ] 5. sudo ./scripts/install-kiosk-autostart.sh  # prints/saves Admin PIN
+- [ ] 6. Commission YKV + SAD cal (ykv-commissioning) → data/ykv_sad_cal*.json
+- [ ] 7. CAT6 edge ↔ YKV only; sudo ./scripts/enable-ykv-link.sh (or reboot)
+- [ ] 8. Verify: ping .11, connected=true, weight moves; admin unlocks with PIN
 - [ ] 9. Reboot once; confirm kiosk autostarts
-- [ ] 10. (Tuotanto) BIOS RTC wake + `sudo ./scripts/install-power-schedule.sh` — [`docs/power-schedule.md`](../../docs/power-schedule.md); YKV/näyttö katkaisija erikseen
+- [ ] 10. (Tuotanto) BIOS RTC wake + install-power-schedule.sh
 ```
 
 ## Commands (copy)
@@ -50,28 +53,28 @@ Deploy progress:
 cd ~/havikkivaaka
 sudo ./scripts/bootstrap-xubuntu.sh
 # Optional overrides before install:
-#   export HAVIKKI_IFACE=enp1s0 HAVIKKI_USER="$USER"
+#   export HAVIKKI_IFACE=enp1s0 HAVIKKI_USER="$USER" HAVIKKI_ADMIN_PIN='……'
 sudo ./scripts/install-kiosk-autostart.sh
 
-# After cal file is present and cable to YKV:
+# After cal file is present and cable to YKV (isolated link):
 sudo ./scripts/enable-ykv-link.sh
 sudo systemctl restart havikki-kiosk-app
-curl -s http://127.0.0.1:8080/api/state   # mode=live, connected, weight_g / bin_weight_g
+curl -s http://127.0.0.1:8080/api/state
+curl -s http://127.0.0.1:8080/api/auth   # auth_required: true after install
 
-# Production daily power (optional; BIOS RTC wake required):
-# sudo ./scripts/install-power-schedule.sh
-# docs/power-schedule.md
+python3 tools/test_security_gates.py
 ```
 
 ### Env knobs
 
 | Variable | Role |
 |----------|------|
-| `HAVIKKI_IFACE` | Ethernet to YKV (default often `enp1s0`) |
+| `HAVIKKI_IFACE` | Ethernet to YKV (auto-detect if unset) |
 | `HAVIKKI_HOST` | YKV IP (default `192.168.50.11`) |
-| `HAVIKKI_HTTP_HOST` | Bind (`0.0.0.0` for LAN admin) |
+| `HAVIKKI_HTTP_HOST` | Bind (`0.0.0.0` for isolated-switch admin) |
 | `HAVIKKI_HTTP_PORT` | Default `8080` |
-| `HAVIKKI_USER` | Service/autologin user |
+| `HAVIKKI_USER` | Service/autologin user (default: `SUDO_USER`) |
+| `HAVIKKI_ADMIN_PIN` | Admin API PIN (else generated into `/etc/havikkivaaka/env`) |
 | `HAVIKKI_MOCK` | Force mock (UI-only; not for dealer live) |
 
 ### Mock vs live
@@ -128,6 +131,8 @@ Not two Eth roles on one NIC at once. **Switch** preferred for Mac + edge + YKV 
 - Claim deploy done on mock-only.  
 - Rely on KCP `SI` kg without SAD cal on this hardware.  
 - Hardcode Lenovo-only iface without `HAVIKKI_IFACE`.  
+- Plug the YKV NIC into the building/school LAN (isolated appliance only).  
+- Skip Admin PIN on a handoff image.  
 - Start Mac listen/DHCP unless user asked that turn.
 
 ## Next UI / product paths (phase 3 — not deploy blockers)

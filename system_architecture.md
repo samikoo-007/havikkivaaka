@@ -9,18 +9,53 @@ Product feature gaps vs competitors (admin + kiosk backlog): [`docs/kilpailija-o
 
 **Lifecycle / phases (test → clean Ubuntu → final UI → clone):** [`docs/roadmap-deployment.md`](docs/roadmap-deployment.md).
 
+## Network model (isolated appliance — hard rule)
+
+Hävikkivaaka is a **fully offline, isolated system**. It is **not** designed to join a school, restaurant, or office production LAN / Wi-Fi / internet.
+
+```text
+  [YKV-02 …]──CAT6──┐
+                    ├──[dedicated switch OR direct cable]──[Edge PC + kiosk display]
+  [Admin laptop]────┘         only 192.168.50.0/24 (lab defaults)
+```
+
+| Do | Do not |
+|----|--------|
+| Own mini-switch or direct CAT6 edge↔YKV | Plug the YKV NIC into the building’s main switch |
+| Admin PC on the **same isolated** switch | Expose `:8080` on guest Wi-Fi or the internet |
+| DHCP (`dnsmasq`) **only** on the YKV-facing iface | Run YKV DHCP on an iface that has a default route |
+
+`scripts/enable-ykv-link.sh` **refuses** to start if the chosen iface carries a default route (override only with `HAVIKKI_ALLOW_DHCP_ON_DEFAULTED_IFACE=1` for deliberate lab tests).
+
+## Security (isolated LAN assumptions)
+
+Threat model = someone on the **same isolated switch**, not the public internet. Still:
+
+| Control | Implementation |
+|---------|----------------|
+| Static path containment | `/static/` only serves files under `app/static` (`safe_static_file`) |
+| Admin PIN | `HAVIKKI_ADMIN_PIN` via `/etc/havikkivaaka/env` (install generates a 6-digit PIN). Header `X-Havikki-Pin` on admin APIs. Not a cookie (blocks casual CSRF forms). |
+| Open without PIN | `GET /`, kiosk assets, `GET /api/state`, `GET /api/health`, `GET /api/auth` |
+| JSON body cap | 64 KiB |
+| SQLite | `journal_mode=WAL`, `synchronous=FULL` |
+| Multi-scale poll | Short KCP timeout (0.4 s) + skip dead slot ~5 s so one offline scale does not freeze the others |
+
+Unset PIN = open admin (lab only; server logs a warning). Install from GitHub **always** writes a PIN into `/etc/havikkivaaka/env` (chmod 600).
+
+Gates checklist for agents: [`.cursor/skills/havikkivaaka-production-gates`](.cursor/skills/havikkivaaka-production-gates/SKILL.md).
+
 ## Project status (phases)
 
 | Phase | Meaning |
 |-------|---------|
-| **Now** | **Testikokoonpano only** — Lenovo lab validates YKV read/operation + software. Not a production appliance. |
+| **Now** | **Testikokoonpano only** — Lenovo lab validates YKV read/operation + software. Not a production appliance sold “as-is”, but the repo path is meant to be cloneable onto an isolated edge host. |
 | **Repo duty** | Everything proven on the lab host must be reproducible on a **clean Ubuntu** machine via repo scripts (`bootstrap-xubuntu.sh`, `install-kiosk-autostart.sh`, …). |
 | **After YKV OK** | Final kiosk + admin UX/features (backlogs), still developed against the validated stack. |
 | **When lab is “done”** | Clone to another machine: scripted install (always) and/or **Clonezilla image / custom ISO → bootable USB** — see roadmap §4. |
 
-## Deployment (target): offline LAN + admin via switch
+## Deployment (target): offline isolated LAN + admin via switch
 
-Fully offline: no cloud, no internet. One edge host runs the API + guest kiosk display; staff open admin from another machine on the same local switch.
+Fully offline: no cloud, no internet, **no uplink to the site LAN**. One edge host runs the API + guest kiosk display; staff open admin from another machine on the **same private switch**.
 
 ```text
 [YKV-02 A/B] --CAT6--+--[switch]--[Kiosk/edge PC or Pi]
@@ -28,18 +63,18 @@ Fully offline: no cloud, no internet. One edge host runs the API + guest kiosk d
                      |              Chromium kiosk → http://127.0.0.1:8080/
                      |
                      +-------------[Admin PC / laptop]
-                                    Browser → http://<edge-ip>:8080/admin
+                                    Browser → http://<edge-ip>:8080/admin  (+ PIN)
 ```
 
 | Role | Device | Notes |
 |------|--------|--------|
 | Edge (palvelin + kiosk-näyttö) | miniPC / Raspberry Pi / lab Lenovo | One display is enough; Chromium kiosk on localhost |
-| Admin client | Separate PC on switch | `http://<edge-lan-ip>:8080/admin` — reports, thresholds, health, config write |
+| Admin client | Separate PC on **isolated** switch | `http://<edge-lan-ip>:8080/admin` — PIN required when configured |
 | Scales | YKV-02 on same switch (or direct to edge) | KCP TCP **23** |
 
-**Software split (same process):** kiosk reads `GET /api/state` (+ protected tare/reset); admin writes config / reads reports. Not two HDMI outputs on one box.
+**Software split (same process):** kiosk reads `GET /api/state`; admin writes config / reports with PIN. Not two HDMI outputs on one box.
 
-**Bind:** HTTP listens on `0.0.0.0:8080` (env `HAVIKKI_HTTP_HOST`). Intended for isolated site LAN only (admin auth still backlog).
+**Bind:** HTTP listens on `0.0.0.0:8080` (env `HAVIKKI_HTTP_HOST`) so the admin PC on the isolated switch can reach it. Do **not** interpret this as “safe on the public internet”.
 
 ## Lab (now) — testikokoonpano only
 | Role | Device | Notes |
@@ -65,7 +100,9 @@ Lab without switch: one Ethernet cable at a time (Mac↔Lenovo **or** Lenovo↔Y
 - `scripts/havikki-boot-ykv.sh` + `havikki-ykv-link.service` — EEE off + `enable-ykv-link.sh` (dnsmasq → `.11`)
 - `scripts/enable-ykv-link-macos.sh` / `disable-ykv-link-macos.sh` — Mac lab NIC `.1/24` (no default gw) + `tools/ykv_dhcp.py` (bind `.1:67` only)
 - `scripts/listen-ykv.sh` + `tools/kcp_listen.py` — read-only KCP listen (Mac or Linux); no tare/zero
-- `havikki-kiosk-app.service` — live `python3 -m app.server` as user `sami`, `Restart=always`
+- `havikki-kiosk-app.service` — live `python3 -m app.server` as install user (`HAVIKKI_USER` / `SUDO_USER`), `Restart=always`; loads `/etc/havikkivaaka/env` (`HAVIKKI_ADMIN_PIN`)
+- `scripts/install-kiosk-autostart.sh` — units + LightDM autologin + XFCE autostart; generates Admin PIN if missing
+- Weight: per-slot `data/ykv_sad_cal_{a,b,c}.json` or shared `data/ykv_sad_cal.json`; else factory KCP `SI`
 - `scripts/install-kiosk-autostart.sh` — units + LightDM autologin + XFCE autostart
 - `scripts/install-power-schedule.sh` — evening day-close timer + boot ensure + RTC helpers ([`docs/power-schedule.md`](docs/power-schedule.md))
 - `scripts/havikki-day-close.sh` / `havikki-day-boot-ensure.sh` / `havikki-rtc-wake.sh` — export+reset, missed-close safety, RTC wakealarm
@@ -76,7 +113,7 @@ Lab without switch: one Ethernet cable at a time (Mac↔Lenovo **or** Lenovo↔Y
 1. `network-online` → `havikki-ykv-link` (EEE + DHCP for YKV)
 2. `havikki-kiosk-app` → HTTP `0.0.0.0:8080`, KCP `192.168.50.11:23`
 3. `havikki-day-boot-ensure` (oneshot) — missed evening close
-4. LightDM autologin `sami` → autostart Chromium kiosk (`--browser-only`)
+4. LightDM autologin (install user) → autostart Chromium kiosk (`--browser-only`)
 5. Evening: `havikki-day-close.timer` → export+reset → RTC wake → `poweroff` (YKV/näyttö katkaisija erikseen)
 
 ### Lab UI mode (mock, no YKV)

@@ -15,6 +15,14 @@ havikki_power_defaults() {
     # shellcheck disable=SC1091
     source /etc/havikkivaaka/power-schedule.conf
   fi
+  # Admin PIN for mutating API (same file as systemd EnvironmentFile)
+  if [[ -f /etc/havikkivaaka/env ]]; then
+    # shellcheck disable=SC1091
+    set -a
+    # shellcheck disable=SC1091
+    source /etc/havikkivaaka/env
+    set +a
+  fi
   mkdir -p "$LOG_DIR" "$STAMP_DIR"
 }
 
@@ -39,8 +47,12 @@ havikki_api_json() {
   local method="$1"
   local path="$2"
   local body="${3:-{}}"
+  local -a hdr=(-H "Content-Type: application/json")
+  if [[ -n "${HAVIKKI_ADMIN_PIN:-}" ]]; then
+    hdr+=(-H "X-Havikki-Pin: ${HAVIKKI_ADMIN_PIN}")
+  fi
   curl -sf -X "$method" "$API_BASE$path" \
-    -H "Content-Type: application/json" \
+    "${hdr[@]}" \
     -d "$body"
 }
 

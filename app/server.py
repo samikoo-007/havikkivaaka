@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import errno
+import hmac
 import json
 import logging
 import os
@@ -25,13 +26,19 @@ from app.config import (
     layout_diner_split,
     layout_kiosk_enabled,
 )
-from app.kcp import KcpClient, MockScale, grams_from_sad, load_sad_cal
+from app.kcp import (
+    KcpClient,
+    MockScale,
+    grams_from_sad,
+    load_sad_cal_for_slot,
+)
 from app.state_machine import StateMachine
 from app.storage import Storage
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT.parent / "data"
 STATIC = ROOT / "static"
+STATIC_ROOT = STATIC.resolve()
 EXPORTS = DATA / "exports"
 LOG = logging.getLogger("havikkivaaka")
 
@@ -39,10 +46,47 @@ LOG = logging.getLogger("havikkivaaka")
 POLL_OK_S = 0.25
 POLL_FAIL_MIN_S = 1.0
 POLL_FAIL_MAX_S = 15.0
+# Short KCP timeout so one dead scale does not freeze the others for 5s.
+KCP_POLL_TIMEOUT_S = 0.4
+SLOT_SKIP_AFTER_FAIL_S = 5.0
+# Cap JSON POST bodies (admin config patches are tiny).
+MAX_JSON_BODY_BYTES = 64 * 1024
+ADMIN_PIN_HEADER = "X-Havikki-Pin"
 
 
 def _env_truthy(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def admin_pin_configured() -> str | None:
+    """Return configured admin PIN, or None if open (lab without PIN)."""
+    pin = os.environ.get("HAVIKKI_ADMIN_PIN", "").strip()
+    return pin or None
+
+
+def pin_matches(provided: str, expected: str) -> bool:
+    """Constant-time PIN compare (different lengths → False)."""
+    a = provided.encode("utf-8")
+    b = expected.encode("utf-8")
+    if len(a) != len(b):
+        hmac.compare_digest(a, a)
+        return False
+    return hmac.compare_digest(a, b)
+
+
+def safe_static_file(rel: str) -> Path | None:
+    """Resolve /static/<rel> only if the file stays under app/static."""
+    if not rel or "\x00" in rel:
+        return None
+    try:
+        candidate = (STATIC / rel).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    if not candidate.is_relative_to(STATIC_ROOT):
+        return None
+    if candidate.is_file():
+        return candidate
+    return None
 
 
 def friendly_scale_error(exc: BaseException) -> str:
@@ -94,10 +138,19 @@ class App:
         self._fail_delay_s = POLL_FAIL_MIN_S
         self._last_logged_error: str | None = None
         self._last_poll_ok_at: str | None = None
-        self._sad_cal = None if mock else load_sad_cal()
+        # Per-slot SAD cal (ykv_sad_cal_{a,b,c}.json or shared ykv_sad_cal.json).
+        self._sad_cal_by_slot: dict[str, dict[str, float] | None] = {
+            s: (None if mock else load_sad_cal_for_slot(s, DATA))
+            for s in ("a", "b", "c")
+        }
+        self._sad_cal = next(
+            (c for c in self._sad_cal_by_slot.values() if c is not None), None
+        )
         # SAD soft-tare per scale (KCP T does not affect SAD path).
         self._sad_tare_g: dict[str, float] = {"a": 0.0, "b": 0.0, "c": 0.0}
         self._sad_raw_g: dict[str, float] = {"a": 0.0, "b": 0.0, "c": 0.0}
+        # Skip a dead slot briefly so one failed KCP does not stall the others.
+        self._slot_skip_until: dict[str, float] = {}
 
         self.scale_a: KcpClient | MockScale | None = None
         self.scale_b: KcpClient | MockScale | None = None
@@ -114,11 +167,25 @@ class App:
         self.scale = self.scale_a  # legacy
 
         if self._sad_cal:
-            LOG.info(
-                "weight source=SAD (SI cal broken on this YKV); empty=%s ref=%s@%skg",
-                int(self._sad_cal["sad_empty"]),
-                int(self._sad_cal["sad_at_ref"]),
-                self._sad_cal["ref_kg"],
+            for slot, cal in self._sad_cal_by_slot.items():
+                if not cal:
+                    continue
+                LOG.info(
+                    "weight source=SAD slot=%s empty=%s ref=%s@%skg",
+                    slot,
+                    int(cal["sad_empty"]),
+                    int(cal["sad_at_ref"]),
+                    cal["ref_kg"],
+                )
+        elif not mock:
+            LOG.info("weight source=SI (no data/ykv_sad_cal*.json)")
+        pin = admin_pin_configured()
+        if pin:
+            LOG.info("admin PIN required (header %s)", ADMIN_PIN_HEADER)
+        else:
+            LOG.warning(
+                "HAVIKKI_ADMIN_PIN unset — admin APIs open on bind address "
+                "(ok only on an isolated lab switch)"
             )
         self._refresh_day()
         if self.cfg.prefill_waste_g > 0 and "a" in self.cfg.slots():
@@ -165,8 +232,8 @@ class App:
                 # Prefer explicit --host / HAVIKKI_HOST when provided at start
                 host = self.host
                 port = self.port
-            self._set_scale(slot, KcpClient(host, port))
-            LOG.info("scale %s → %s:%s", slot, host, port)
+            self._set_scale(slot, KcpClient(host, port, timeout=KCP_POLL_TIMEOUT_S))
+            LOG.info("scale %s → %s:%s (timeout=%.1fs)", slot, host, port, KCP_POLL_TIMEOUT_S)
 
     def _make_machine(
         self,
@@ -307,7 +374,7 @@ class App:
 
     def _apply_sad_soft_tare(self, slot: str = "a") -> None:
         """Zero current SAD reading in software (lock held). No-op if not SAD mode."""
-        if not self._sad_cal:
+        if not self._sad_cal_by_slot.get(slot):
             return
         self._sad_tare_g[slot] = float(self._sad_raw_g.get(slot, 0.0))
         LOG.info("SAD soft-tare %s offset=%.1fg", slot, self._sad_tare_g[slot])
@@ -649,11 +716,12 @@ class App:
         use_sad: bool,
         label: str,
     ) -> None:
+        cal = self._sad_cal_by_slot.get(label)
         if not scale.connected:
             scale.connect()
-        if use_sad and isinstance(scale, KcpClient) and self._sad_cal:
+        if use_sad and isinstance(scale, KcpClient) and cal:
             sad = scale.sad()
-            raw_g = grams_from_sad(sad, self._sad_cal)
+            raw_g = grams_from_sad(sad, cal)
             with self._lock:
                 self._sad_raw_g[label] = raw_g
                 value = raw_g - self._sad_tare_g.get(label, 0.0)
@@ -682,24 +750,30 @@ class App:
                 continue
             any_ok = False
             primary_err: BaseException | None = None
+            now = time.monotonic()
             for label in slots:
                 scale = scales.get(label)
                 machine = machines.get(label)
                 if scale is None or machine is None:
                     continue
+                skip_until = self._slot_skip_until.get(label, 0.0)
+                if now < skip_until:
+                    continue
                 try:
                     self._poll_one(
                         scale=scale,
                         machine=machine,
-                        use_sad=bool(self._sad_cal),
+                        use_sad=bool(self._sad_cal_by_slot.get(label)),
                         label=label,
                     )
                     any_ok = True
+                    self._slot_skip_until.pop(label, None)
                 except Exception as e:  # noqa: BLE001
                     friendly = friendly_scale_error(e)
                     with self._lock:
                         machine.state.connected = False
                         machine.state.error = friendly
+                    self._slot_skip_until[label] = time.monotonic() + SLOT_SKIP_AFTER_FAIL_S
                     raw = str(e)
                     if raw != self._last_logged_error:
                         LOG.warning("scale poll %s: %s → %s", label.upper(), raw, friendly)
@@ -770,8 +844,39 @@ def make_handler(app: App):
             self.end_headers()
             self.wfile.write(data)
 
+        def _admin_authorized(self) -> bool:
+            expected = admin_pin_configured()
+            if expected is None:
+                return True
+            provided = self.headers.get(ADMIN_PIN_HEADER, "")
+            return pin_matches(provided, expected)
+
+        def _require_admin(self) -> bool:
+            """Return True if allowed; else send 401 JSON and return False."""
+            if self._admin_authorized():
+                return True
+            self._json(
+                401,
+                {
+                    "ok": False,
+                    "error": "Admin PIN vaaditaan",
+                    "auth_required": True,
+                },
+            )
+            return False
+
         def _read_json_body(self) -> dict:
-            length = int(self.headers.get("Content-Length", "0"))
+            raw_len = self.headers.get("Content-Length", "0")
+            try:
+                length = int(raw_len)
+            except ValueError:
+                length = 0
+            if length < 0:
+                length = 0
+            if length > MAX_JSON_BODY_BYTES:
+                raise ValueError(
+                    f"pyyntö liian suuri (max {MAX_JSON_BODY_BYTES} tavua)"
+                )
             raw = self.rfile.read(length) if length else b"{}"
             try:
                 data = json.loads(raw.decode("utf-8") or "{}")
@@ -788,14 +893,29 @@ def make_handler(app: App):
             if path in ("/", "/index.html"):
                 self._file(STATIC / "index.html", "text/html; charset=utf-8")
             elif path in ("/admin", "/admin.html"):
+                # HTML shell is public so the PIN prompt can load; APIs stay gated.
                 self._file(STATIC / "admin.html", "text/html; charset=utf-8")
+            elif path == "/api/auth":
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        "auth_required": admin_pin_configured() is not None,
+                        "pin_header": ADMIN_PIN_HEADER,
+                    },
+                )
             elif path == "/api/state":
                 self._json(200, app.snapshot())
-            elif path == "/api/config":
-                self._json(200, {"ok": True, "config": app.get_config()})
             elif path == "/api/health":
+                # Open for day-close wait / kiosk ops; no day event dump.
                 self._json(200, app.health())
+            elif path == "/api/config":
+                if not self._require_admin():
+                    return
+                self._json(200, {"ok": True, "config": app.get_config()})
             elif path == "/api/events":
+                if not self._require_admin():
+                    return
                 try:
                     limit = int((qs.get("limit") or ["100"])[0])
                     offset = int((qs.get("offset") or ["0"])[0])
@@ -827,6 +947,8 @@ def make_handler(app: App):
                     },
                 )
             elif path == "/api/export/day.csv":
+                if not self._require_admin():
+                    return
                 d = day or date.today().isoformat()
                 self._text(
                     200,
@@ -835,6 +957,8 @@ def make_handler(app: App):
                     filename=f"havikkivaaka-{d}.csv",
                 )
             elif path == "/api/export/day.json":
+                if not self._require_admin():
+                    return
                 d = day or date.today().isoformat()
                 self._text(
                     200,
@@ -844,11 +968,13 @@ def make_handler(app: App):
                 )
             elif path.startswith("/static/"):
                 rel = path[len("/static/") :]
-                fp = STATIC / rel
-                if fp.is_file():
+                fp = safe_static_file(rel)
+                if fp is not None:
                     ctype = "text/css" if fp.suffix == ".css" else "application/octet-stream"
                     if fp.suffix == ".html":
                         ctype = "text/html; charset=utf-8"
+                    elif fp.suffix == ".js":
+                        ctype = "application/javascript; charset=utf-8"
                     self._file(fp, ctype)
                 else:
                     self.send_error(404)
@@ -857,7 +983,15 @@ def make_handler(app: App):
 
         def do_POST(self) -> None:  # noqa: N802
             path = urlparse(self.path).path
-            data = self._read_json_body()
+            try:
+                data = self._read_json_body()
+            except ValueError as e:
+                self._json(413, {"ok": False, "error": str(e)})
+                return
+
+            # All mutating / staff routes require PIN when configured.
+            if not self._require_admin():
+                return
 
             try:
                 if path == "/api/tare":

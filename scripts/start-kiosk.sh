@@ -12,6 +12,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 mkdir -p "$ROOT/logs"
 
+# Load Admin PIN etc. when present (same file as systemd EnvironmentFile)
+if [[ -f /etc/havikkivaaka/env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source /etc/havikkivaaka/env
+  set +a
+fi
+
 MODE="mock"
 SETTLE="${SETTLE:-2}"
 HTTP_PORT="${HTTP_PORT:-8080}"

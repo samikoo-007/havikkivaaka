@@ -20,10 +20,11 @@ description: >-
 | Edge IP | `192.168.50.10` |
 | Mac (dev/admin) | `192.168.50.1` |
 | YKV | `192.168.50.11:23` KCP ASCII `\r\n` |
-| HTTP | `0.0.0.0:8080` (LAN admin); kiosk Chromium uses `127.0.0.1:8080` |
-| Admin URL (from Mac) | `http://192.168.50.10:8080/admin` |
-| SSH | `sami@192.168.50.10` |
-| Ethernet iface (Lenovo) | `enp1s0` (EEE off required) |
+| HTTP | `0.0.0.0:8080` (isolated-switch admin); kiosk Chromium uses `127.0.0.1:8080` |
+| Admin URL (from Mac) | `http://192.168.50.10:8080/admin` (+ PIN when configured) |
+| Admin PIN | `/etc/havikkivaaka/env` → `HAVIKKI_ADMIN_PIN` (header `X-Havikki-Pin`) |
+| SSH | `sami@192.168.50.10` (lab); install defaults to `SUDO_USER` |
+| Ethernet iface (Lenovo) | `enp1s0` (EEE off required); other hosts: `HAVIKKI_IFACE` / auto-detect |
 
 Without a switch: **one cable** — Mac↔Lenovo **or** Lenovo↔YKV **or** Mac↔YKV (diagnostic), not two at once.
 
@@ -63,6 +64,7 @@ Mac listen success is **not** Ubuntu/YKV stack success — it only proves the tr
 - KCP model: [`docs/kcp-protocol-model.md`](../../../docs/kcp-protocol-model.md)
 - Admin backlog: [`docs/admin-backlog-agentti2.md`](../../../docs/admin-backlog-agentti2.md)
 - Kiosk backlog: [`docs/kiosk-kilpailija-esitys.md`](../../../docs/kiosk-kilpailija-esitys.md)
+- **Before any non-lab handoff:** [`havikkivaaka-production-gates`](../havikkivaaka-production-gates/SKILL.md) (path traversal, open admin, DHCP, poll coupling)
 
 ## Phase rules
 
@@ -127,7 +129,9 @@ rsync -az --exclude '.git' --exclude 'data/' --exclude 'logs/' \
   --exclude '__pycache__' ./ sami@192.168.50.10:~/havikkivaaka/
 ```
 
-Env overrides: `HAVIKKI_IFACE`, `HAVIKKI_HOST`, `HAVIKKI_HTTP_HOST`, `HAVIKKI_HTTP_PORT`, `HAVIKKI_USER`.
+Env overrides: `HAVIKKI_IFACE`, `HAVIKKI_HOST`, `HAVIKKI_HTTP_HOST`, `HAVIKKI_HTTP_PORT`, `HAVIKKI_USER`, `HAVIKKI_ADMIN_PIN`.
+
+Security / handoff gates: [`havikkivaaka-production-gates`](../havikkivaaka-production-gates/SKILL.md). Network = isolated appliance only.
 
 ## Agent do / don't
 
@@ -141,6 +145,7 @@ Env overrides: `HAVIKKI_IFACE`, `HAVIKKI_HOST`, `HAVIKKI_HTTP_HOST`, `HAVIKKI_HT
 **Don't**
 
 - Treat Lenovo as production golden image until roadmap phase 4.
+- Hand the stack to another site before production gates: `/static/` containment, admin PIN, DHCP default-route refusal. See [`havikkivaaka-production-gates`](../havikkivaaka-production-gates/SKILL.md).
 - Ship final kiosk/admin layout as “done” before live YKV sign-off.
 - Bind admin to `127.0.0.1` only if LAN admin via switch is required (`0.0.0.0` is the agreed default).
 - Confuse mock success with YKV hardware success.

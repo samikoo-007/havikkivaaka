@@ -2,6 +2,10 @@
 # Configure laptop Ethernet for direct YKV-02 link + DHCP for the transmitter.
 # Usage: sudo ./scripts/enable-ykv-link.sh [IFACE]
 # Default IFACE: first connected ethernet-like link, else eth0.
+#
+# SAFETY: refuses to start if the chosen iface carries a default route
+# (looks like the site/office LAN). YKV DHCP must stay on an isolated cable.
+# Override only for deliberate lab tests: HAVIKKI_ALLOW_DHCP_ON_DEFAULTED_IFACE=1
 
 set -euo pipefail
 
@@ -28,6 +32,17 @@ fi
 
 ip link show "$IFACE" >/dev/null || die "interface not found: $IFACE"
 echo "Using interface: $IFACE"
+
+# Refuse DHCP on an iface that is the machine's default gateway path
+# (would poison a shared school/office LAN).
+if [[ "${HAVIKKI_ALLOW_DHCP_ON_DEFAULTED_IFACE:-}" != "1" ]]; then
+  if ip -4 route show default 2>/dev/null | grep -Eq "[[:space:]]dev[[:space:]]${IFACE}([[:space:]]|$)"; then
+    die "refusing DHCP on $IFACE: it has a default route (looks like site LAN). Use a dedicated cable to YKV only, or set HAVIKKI_ALLOW_DHCP_ON_DEFAULTED_IFACE=1 for a deliberate lab exception."
+  fi
+  if ip -4 route show default dev "$IFACE" 2>/dev/null | grep -q .; then
+    die "refusing DHCP on $IFACE: default route via this iface. Isolated YKV link only."
+  fi
+fi
 
 ip link set "$IFACE" up
 
@@ -60,7 +75,7 @@ fi
 rm -f "$DNSMASQ_PID" "$DNSMASQ_LEASES"
 
 dnsmasq --conf-file="$DNSMASQ_CONF" --pid-file="$DNSMASQ_PID"
-echo "dnsmasq started — waiting for YKV DHCP lease at $YKV_IP"
+echo "dnsmasq started — waiting for YKV DHCP lease at $YKV_IP (iface=$IFACE only)"
 echo "Then:  printf 'SI\\r\\n' | nc -v $YKV_IP 23"
 echo "Or:    python3 tools/kcp_client.py --host $YKV_IP si"
 echo "Stop:  sudo kill \$(cat $DNSMASQ_PID); sudo nmcli dev set $IFACE managed yes"

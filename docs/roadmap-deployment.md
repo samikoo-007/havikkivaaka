@@ -114,9 +114,10 @@ Kun testikokoonpano + lopullinen UI ovat valmiita, järjestelmä pitää pystyä
 
 ### Turvallisuus / offline
 
-- Tuotanto-LAN ilman internetiä; admin LAN-IP:llä.
-- Imageen **ei** sisällytetä salaisuuksia gitistä erillään (myöhempi admin-PIN generoidaan asennuksessa).
-- Lab-käyttäjä `sami` / lab-IP:t korvataan tuotantoparametreilla ennen golden-imagea.
+- **Eristetty applianssi:** oma kytkin/kaapeli; ei talon LAN / Wi-Fi / internet (ks. `system_architecture.md`).
+- Admin LAN-IP:llä + `HAVIKKI_ADMIN_PIN` (`/etc/havikkivaaka/env`).
+- Imageen **ei** sisällytetä salaisuuksia gitistä; PIN generoidaan asennuksessa.
+- Lab-käyttäjä `sami` / lab-IP:t korvataan `HAVIKKI_USER` / `SUDO_USER` + iface-autotunnistuksella.
 
 ---
 

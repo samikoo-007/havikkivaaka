@@ -6,8 +6,8 @@ Suositus tuotanto-/demoasennukseen. Softa ja verkko: [`system_architecture.md`](
 
 | Mitä | Missä |
 |------|--------|
-| **KERN**-punnitusalustat / kennovaaka-alustat | **[Prodi Oy](https://prodi.fi/)** — [KERN-tuotemerkki](https://prodi.fi/tuotemerkki/kern/) |
-| **KERN YKV-02** digitaalinen punnituslähetin (Ethernet + KCP) | Sama: kysy Prodilta YKV-02 + yhteensopiva alusta |
+| **KERN**-punnitusalustat / kennovaaka-alustat | **[Prodi Oy](https://prodi.fi/)** — [KERN-tuotemerkki](https://prodi.fi/tuotemerkki/kern/); mallilista alla (KERN & Sohn -linkit) |
+| **KERN YKV-02** digitaalinen punnituslähetin (Ethernet + KCP) | [KERN YKV-02](https://www.kern-sohn.com/shop/en/products/weighing-systems-industry-4-0/tykv-02-a/) · Suomi: kysy Prodilta YKV-02 + alusta |
 
 **Prodi Oy**  
 Valakkatie 2, 00780 Helsinki  
@@ -86,12 +86,79 @@ Hinnat / saatavuus tarkistettu **2026-09-22** (sis. ALV). Vahvista myyjän sivul
 
 | Osa | Suositus | Määrä |
 |-----|----------|-------|
-| Punnitusalusta / kennovaaka | KERN-yhteensopiva alusta (Prodilta) | 1–3 layoutin mukaan |
-| Lähetin | **KERN YKV-02** (Ethernet) | 1 per alusta |
+| Punnitusalusta / kennovaaka | KERN-alusta YKV-02:lle (alla) — tilaa **Prodilta** | 1–3 layoutin mukaan |
+| Lähetin | **[KERN YKV-02](https://www.kern-sohn.com/shop/en/products/weighing-systems-industry-4-0/tykv-02-a/)** (Ethernet + KCP) | 1 per alusta |
 | CAT6 | Edge/kytkin ↔ kukin YKV | 1 per lähetin |
 | Kalibrointipaino | Referenssi SAD-caliin (esim. 20–50 kg, paikallisesti) | 1 |
 
-Käyttöönotto / SAD: [`.cursor/skills/ykv-commissioning`](../.cursor/skills/ykv-commissioning/SKILL.md).
+KERN: YKV-02 on yhteensopiva **KERN-punnitusalustojen** kanssa ([YKV-02](https://www.kern-sohn.com/shop/en/products/weighing-systems-industry-4-0/tykv-02-a/)). Suomi-hankinta: [Prodi](https://prodi.fi/). Käyttöönotto / SAD: [`.cursor/skills/ykv-commissioning`](../.cursor/skills/ykv-commissioning/SKILL.md).
+
+#### YKV-02-yhteensopivat alustat — yhteenveto (malli → Max)
+
+Listahinnat KERN-kaupasta (ilman ALV / *), lähde käyttäjän lista **2026-09-23**. **Max** = punnituskapasiteetin yläraja (dual-range: korkeampi arvo). Linkki = KERN & Sohn -tuotesivu.
+
+**Hävikkivaaka (lautas A/B):** tyypillisesti **KFP/KXP ~30–150 kg**. Keittiö C voi olla sama tai suurempi. Lattiasillat (KIP) / palkit (KFA) ovat raskaita teollisuusratkaisuja — harvoin diner-pisteeseen.
+
+##### Platform KFP
+
+| Malli | Max | d | Lista €* |
+|-------|-----|---|----------|
+| [KFP 3V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-3V20M-A/) | **3 kg** | 100 mg | 205 |
+| [KFP 6V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-6V20M-A/) | **6 kg** | 200 mg | 205 |
+| [KFP 6V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-6V20LM-A/) | **6 kg** | 200 mg | 250 |
+| [KFP 15V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-15V20M-A/) | **15 kg** | 500 mg | 250 |
+| [KFP 15V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-15V20LM-A/) | **15 kg** | 500 mg | 315 |
+| [KFP 15V30M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-15V30M-A/) | **15 kg** | 1 g | 700 |
+| [KFP 30V20SM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-30V20SM-A/) | **30 kg** | 1 g | 250 |
+| [KFP 30V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-30V20M-A/) | **30 kg** | 1 g | 315 |
+| [KFP 30V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-30V20LM-A/) | **30 kg** | 1 g | 395 |
+| [KFP 30V30SM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-30V30SM-A/) | **30 kg** | 2 g | 690 |
+| [KFP 30V30M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-30V30M-A/) | **30 kg** | 2 g | 760 |
+| [KFP 60V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-60V20M-A/) | **60 kg** | 2 g | 330 |
+| [KFP 60V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-60V20LM-A/) | **60 kg** | 2 g | 405 |
+| [KFP 60V30M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-60V30M-A/) | **60 kg** | 5 g | 760 |
+| [KFP 60V30LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-60V30LM-A/) | **60 kg** | 2 g | 950 |
+| [KFP 60V30XLM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-60V30XLM-A/) | **60 kg** | 2 g | 1 370 |
+| [KFP 150V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-150V20M-A/) | **150 kg** | 5 g | 415 |
+| [KFP 150V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-150V20LM-A/) | **150 kg** | 5 g | 600 |
+| [KFP 150V30SM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-150V30SM-A/) | **150 kg** | 10 g | 710 |
+| [KFP 150V30M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-150V30M-A/) | **150 kg** | 10 g | 940 |
+| [KFP 150V30LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-150V30LM-A/) | **150 kg** | 5 g | 1 280 |
+| [KFP 300V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-300V20M-A/) | **300 kg** | 10 g | 600 |
+| [KFP 300V30M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-300V30M-A/) | **300 kg** | 20 g | 1 200 |
+| [KFP 600V20AM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/TKFP-600V20AM-A/) | **600 kg** | 20 g | 910 |
+
+##### Platform KXP
+
+| Malli | Max | d | Lista €* |
+|-------|-----|---|----------|
+| [KXP 6V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/KXP-6V20LM/) | **6 kg** | 200 mg | 280 |
+| [KXP 15V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/KXP-15V20LM/) | **15 kg** | 500 mg | 380 |
+| [KXP 30V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/KXP-30V20M/) | **30 kg** | 1 g | 380 |
+| [KXP 60V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/KXP-60V20M/) | **60 kg** | 2 g | 390 |
+| [KXP 150V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/KXP-150V20LM/) | **150 kg** | 5 g | 630 |
+| [KXP 300V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/KXP-300V20M/) | **300 kg** | 10 g | 630 |
+
+##### Weighing beams KFA
+
+| Malli | Max | d | Lista €* |
+|-------|-----|---|----------|
+| [KFA 600V20S](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/tkfa-600v20s-b/) | **600 kg** | 200 g | 820 |
+| [KFA 1500V20](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/tkfa-1500v20/) | **1 500 kg** | 500 g | 900 |
+
+##### Weighing bridge KIP
+
+| Malli | Max | d | Lista €* |
+|-------|-----|---|----------|
+| [KIP 600V20SM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/kip-600v20sm/) | **600 kg** | 0,2 kg | 870 |
+| [KIP 600V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/kip-600v20m/) | **600 kg** | 0,2 kg | 1 290 |
+| [KIP 1500V20SM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/kip-1500v20sm/) | **1 500 kg** | 0,5 kg | 870 |
+| [KIP 1500V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/kip-1500v20m/) | **1 500 kg** | 0,5 kg | 1 250 |
+| [KIP 1500V20EM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/kip-1500v20em/) | **1 500 kg** | 0,5 kg | 1 250 |
+| [KIP 3000V20M](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/kip-3000v20m/) | **3 000 kg** | 1 kg | 1 250 |
+| [KIP 3000V20LM](https://www.kern-sohn.com/shop/en/products/measuring-technology-components/platforms/kip-3000v20lm/) | **3 000 kg** | 1 kg | 1 550 |
+
+> *KERN-listahinta ilman ALV:ta; Prodi / tarjous voi poiketa. Dual-range (esim. 60; 150 kg) → Max-sarakkeessa yläraja.
 
 ### Esimerkkikonfiguraatiot
 

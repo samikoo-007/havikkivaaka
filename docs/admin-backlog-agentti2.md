@@ -67,7 +67,7 @@ Checklist nykyisestä lab-/dealer-administa (`/admin`):
 - [x] **Aseta baseline** — `POST /api/set-baseline` (esitäytetty astia)
 - [x] **Tyhjän astian / esitäytön / settle-parametrit** — empty_bin_g, toleranssi, prefill_waste_g, empty_g, empty_away_s, start_delta_g, feedback_show_s
 
-**Ei vielä adminissa:** viikko-/kuukausinäkymä, trendikaaviot, jakso-CSV, auth, hälytykset, PDF, kategoriat. (Vaakamalli A/A+B/A+C/A+B+C/C + (i)-hover **tehty**.)
+**Ei vielä adminissa:** viikko-/kuukausinäkymä, trendikaaviot, jakso-CSV, monirooli-auth, hälytykset, PDF, kategoriat. (Vaakamalli A/A+B/A+C/A+B+C/C + (i)-hover **tehty**; **Admin-PIN** asennuksesta `/etc/havikkivaaka/env`.)
 
 ---
 
@@ -97,7 +97,7 @@ Kartta: Agentti 3 §3 (admin omistaa) + kilpailija-analyysi §4 Must adminille +
 | # | Ominaisuus | Lähde | Nykytila | Agentti 2 -työ |
 |---|------------|-------|----------|----------------|
 | S-A1 | **Monipiste (site_id / scale_id)** | Kilpailija Should 6; Agent 3 | `site_id` string | Eventeihin `site_id`/`device_id`; admin suodatus; ei vielä ketju-UI |
-| S-A2 | **Käyttäjät / roolit** (admin vs katselija) | Kilpailija Should 7; Agent 3 | Ei auth | Yksinkertainen PIN/salasana admin-kirjoitukseen (kiosk ei tarvitse tare/reset-PIN:iä) |
+| S-A2 | **Käyttäjät / roolit** (admin vs katselija) | Kilpailija Should 7; Agent 3 | **PIN tehty** (`HAVIKKI_ADMIN_PIN` / `X-Havikki-Pin`); ei vielä erillistä katselijaroolia | Pidä PIN; roolit myöhemmin jos tarvitaan |
 | S-A3 | **Trendikaaviot** 7/30 pv | Kilpailija Should 8; Agent 3: trendit | Ei | Chart päiväaggregaateista (smile/frown/ok -jakauma) |
 | S-A4 | **CO₂ / ESG näkyväksi** | Kilpailija Should 9; Agent 3 | Kerroin + JSON-kenttä | Näytä kg CO₂ päivä-/jaksonäkymässä; kerroin jo UI:ssa |
 | S-A5 | **Hälytykset / briefingit** | Kilpailija Should 10; Agent 3 | Ei | Offline > N min; päivän kg > tavoite → webhook/sähköposti |

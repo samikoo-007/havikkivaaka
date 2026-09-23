@@ -13,11 +13,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HAVIKKI_ROOT="${HAVIKKI_ROOT:-$ROOT}"
-USER_NAME="${HAVIKKI_USER:-sami}"
+if [[ -n "${HAVIKKI_USER:-}" ]]; then
+  USER_NAME="$HAVIKKI_USER"
+elif [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+  USER_NAME="$SUDO_USER"
+else
+  USER_NAME="sami"
+fi
 LOG_DIR="${HAVIKKI_LOG_DIR:-$HAVIKKI_ROOT/logs}"
 POWER_OFF_TIME="${HAVIKKI_POWER_OFF_TIME:-18:00}"
 POWER_ON_TIME="${HAVIKKI_POWER_ON_TIME:-08:00}"
 API_BASE="${HAVIKKI_API_BASE:-http://127.0.0.1:8080}"
+ENV_FILE=/etc/havikkivaaka/env
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -53,6 +60,7 @@ Wants=havikki-kiosk-app.service
 [Service]
 Type=oneshot
 EnvironmentFile=-/etc/havikkivaaka/power-schedule.conf
+EnvironmentFile=-$ENV_FILE
 Environment=HAVIKKI_ROOT=$HAVIKKI_ROOT
 Environment=HAVIKKI_LOG_DIR=$LOG_DIR
 ExecStart=$HAVIKKI_ROOT/scripts/havikki-day-close.sh
@@ -86,6 +94,7 @@ Wants=havikki-kiosk-app.service
 Type=oneshot
 User=root
 EnvironmentFile=-/etc/havikkivaaka/power-schedule.conf
+EnvironmentFile=-$ENV_FILE
 Environment=HAVIKKI_ROOT=$HAVIKKI_ROOT
 Environment=HAVIKKI_LOG_DIR=$LOG_DIR
 ExecStart=$HAVIKKI_ROOT/scripts/havikki-day-boot-ensure.sh

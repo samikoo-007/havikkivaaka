@@ -2,7 +2,9 @@
 
 Oma biojäte-/lautashävikkivaaka: **KERN-alusta + YKV-02 (KCP/Ethernet)** + kiosk-UI + Admin.
 
-**Lab = testikokoonpano** (edge esim. `192.168.50.10`): YKV-luvun ja softan validointi. Tuotanto: sama softapino + hankintaohje.
+**Verkkomalli:** täysin **eristetty** kytkin/kaapeli (ei koulun/toimiston yleiseen LAN:iin eikä internetiin). Katso [`system_architecture.md`](system_architecture.md) → *Network model*.
+
+**Lab = testikokoonpano** (edge esim. `192.168.50.10`): YKV-luvun ja softan validointi. Tuotanto: sama softapino + hankintaohje + Admin-PIN.
 
 | | Linkki |
 |---|--------|
@@ -18,7 +20,7 @@ License: [MIT](LICENSE).
 
 - Vaakakokoonpanot Adminissa: **A** · **A+B** · **A+C** · **A+B+C** · **C** (max 3 lähettäjää)
 - Diner-kiosk: A full-width tai A\|B split; 3-portainen palaute; päivätilastot (lautas erillään keittiöstä)
-- Admin: kynnykset, hostit, otsikko/sijainti, (i)-ohjeet, vienti, health
+- Admin: PIN-suojaus, kynnykset, hostit, otsikko/sijainti, (i)-ohjeet, vienti, health
 - Tuotanto: illan day-close + BIOS RTC -herätys; YKV/näyttö katkaisijalla
 
 ## Docs
@@ -36,12 +38,15 @@ License: [MIT](LICENSE).
 - [`system_architecture.md`](system_architecture.md)
 - SAD-kalibrointi: [`data/README.md`](data/README.md) + [`.cursor/skills/ykv-commissioning`](.cursor/skills/ykv-commissioning/SKILL.md)
 
-## Quick start (Xubuntu)
+## Quick start (Xubuntu, GitHub → eristetty edge)
 
 ```bash
+git clone <repo> ~/havikkivaaka && cd ~/havikkivaaka
 sudo ./scripts/bootstrap-xubuntu.sh
-sudo ./scripts/install-kiosk-autostart.sh
-# Live: CAT6 → YKV, sudo ./scripts/enable-ykv-link.sh
+# Valinnainen: export HAVIKKI_IFACE=… HAVIKKI_USER="$USER" HAVIKKI_ADMIN_PIN='……'
+sudo ./scripts/install-kiosk-autostart.sh   # generoi Admin-PIN → /etc/havikkivaaka/env
+# Live: CAT6 vain YKV-linkkiin (ei talon LAN), sitten:
+# sudo ./scripts/enable-ykv-link.sh
 # Tuotannon päivärytmi (BIOS RTC wake ensin):
 # sudo ./scripts/install-power-schedule.sh
 
@@ -49,7 +54,9 @@ sudo ./scripts/install-kiosk-autostart.sh
 ./scripts/start-kiosk.sh --live   # manuaalinen live
 ```
 
-Kiosk: http://127.0.0.1:8080/ — Admin: http://127.0.0.1:8080/admin (LAN: `http://<edge-ip>:8080/admin`).
+Kiosk: http://127.0.0.1:8080/ — Admin: http://127.0.0.1:8080/admin (LAN-kytkimellä: `http://<edge-ip>:8080/admin` + PIN).
+
+Regressiotestit (turva-/tilakone): `python3 tools/test_security_gates.py`
 
 ## Admin (lyhyt)
 
@@ -62,8 +69,9 @@ Asetukset → `data/config.json` (hot-reload). Layout, YKV-hostit, `kiosk_title`
 | `kiosk_location` | Write location |
 | `threshold_ok_g` / `threshold_g` | 200 / 300 g |
 | `export_before_reset` | true |
+| `HAVIKKI_ADMIN_PIN` | `/etc/havikkivaaka/env` (ei gitiin) |
 
-**API:** `GET/POST /api/config`, `GET /api/export/day.csv|.json`, `POST /api/reset-day`, `GET /api/health`, `GET /api/events?day=`.
+**API:** `GET /api/state` (kiosk, avoin); admin-reitit vaativat otsakkeen `X-Havikki-Pin` kun PIN on asetettu. `GET /api/auth` kertoo, onko PIN päällä.
 
 ## Hankinta (KERN)
 

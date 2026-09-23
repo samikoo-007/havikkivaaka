@@ -7,6 +7,8 @@ Huomio: YKV-02 Ethernet on oletuksena **DHCP-asiakas** — pelkkä suora kaapeli
 
 **Yksi kaapeli kerrallaan:** Lenovon `enp1s0` on joko Mac-lab (`192.168.50.1`) **tai** YKV (`192.168.50.11`) — ei molempia samaan aikaan. Mac-varakuuntelu (alla) on kolmas topologia: Mac↔YKV, Lenovo irti.
 
+**Eristetty verkko:** YKV-DHCP (`enable-ykv-link.sh`) on vain omalle kaapelille/kytkimelle. Skripti **kieltäytyy**, jos valitulla liitännällä on oletusreitti (talon LAN). Älä kytke YKV-NIC:iä koulun/toimiston pääkytkimeen.
+
 ---
 
 ## Ethernet-prep (Lenovo `enp1s0`)
